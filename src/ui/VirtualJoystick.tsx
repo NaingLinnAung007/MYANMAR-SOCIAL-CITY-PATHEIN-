@@ -129,92 +129,92 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
         onTouchMove={handleLookMove}
         onTouchEnd={handleLookEnd}
         onTouchCancel={handleLookEnd}
-        className="absolute top-20 right-0 bottom-44 left-1/2 z-10 touch-none pointer-events-auto"
+        className="absolute top-24 right-0 bottom-36 left-1/2 z-10 touch-none pointer-events-auto"
         aria-hidden="true"
       />
 
       {/* Mobile Virtual Joystick on Bottom Left */}
-      <div className="absolute bottom-6 left-6 z-20 pointer-events-auto select-none touch-none">
+      <div className="absolute bottom-4 left-4 sm:bottom-6 sm:left-6 z-20 pointer-events-auto select-none touch-none">
         <div
           ref={joystickBaseRef}
           onTouchStart={handleJoystickStart}
           onTouchMove={handleJoystickMove}
           onTouchEnd={handleJoystickEnd}
           onTouchCancel={handleJoystickEnd}
-          className="relative w-32 h-32 rounded-full bg-slate-950/70 border-2 border-amber-500/40 shadow-2xl flex items-center justify-center backdrop-blur-none"
+          className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-slate-950/75 border-2 border-amber-500/40 shadow-2xl flex items-center justify-center backdrop-blur-none"
         >
           {/* Directional markers */}
           <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none">
-            <Compass className="w-16 h-16 text-amber-400" />
+            <Compass className="w-14 h-14 sm:w-16 sm:h-16 text-amber-400" />
           </div>
 
           {/* Draggable thumb */}
           <div
-            className={`w-14 h-14 rounded-full shadow-lg border-2 border-amber-400 flex items-center justify-center transition-transform duration-75 ${
+            className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full shadow-lg border-2 border-amber-400 flex items-center justify-center transition-transform duration-75 ${
               isDragging ? 'bg-amber-500 text-slate-950 scale-105' : 'bg-amber-600/80 text-amber-100'
             }`}
             style={{
               transform: `translate(${thumbPos.x}px, ${thumbPos.y}px)`,
             }}
           >
-            <div className="w-3 h-3 rounded-full bg-amber-200" />
+            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-amber-200" />
           </div>
         </div>
-        <div className="text-center mt-1 text-[11px] font-medium text-amber-300/80 tracking-wider">
+        <div className="text-center mt-1 text-[10px] font-medium text-amber-300/80 tracking-wider">
           လမ်းလျှောက် (MOVE)
         </div>
       </div>
 
       {/* Action Buttons on Bottom Right */}
-      <div className="absolute bottom-6 right-6 z-20 flex flex-col items-end gap-3 pointer-events-auto select-none">
+      <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 z-20 flex flex-col items-end gap-2 sm:gap-3 pointer-events-auto select-none">
         {/* Context Interaction Button (e.g. Ring Bell, Taste Halawa, Sit) */}
         {nearActionLabel && (
           <button
             onClick={onAction}
-            className="px-4 py-2.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-bold text-sm shadow-xl border border-yellow-300 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+            className="px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-bold text-xs sm:text-sm shadow-xl border border-yellow-300 hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5 sm:gap-2 mb-1"
           >
-            <Sparkles className="w-4 h-4 text-slate-950" />
+            <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-950" />
             <span>{nearActionLabel}</span>
           </button>
         )}
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           {/* Umbrella toggle button */}
           <button
             onClick={onUmbrellaToggle}
-            className={`w-12 h-12 rounded-full border shadow-lg flex flex-col items-center justify-center active:scale-90 transition-all ${
+            className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full border shadow-lg flex flex-col items-center justify-center active:scale-90 transition-all ${
               isHoldingUmbrella
                 ? 'bg-red-600 border-red-300 text-white'
                 : 'bg-slate-900/80 border-slate-600 text-amber-300'
             }`}
             title="Pathein Umbrella (ပုသိမ်ထီး)"
           >
-            <Umbrella className="w-5 h-5" />
-            <span className="text-[9px] font-semibold leading-none mt-0.5">ထီး</span>
+            <Umbrella className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="text-[8px] sm:text-[9px] font-semibold leading-none mt-0.5">ထီး</span>
           </button>
 
           {/* Sprint Toggle */}
           <button
             onClick={() => onSprintToggle(!isSprinting)}
-            className={`w-12 h-12 rounded-full border shadow-lg flex flex-col items-center justify-center active:scale-90 transition-all ${
+            className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full border shadow-lg flex flex-col items-center justify-center active:scale-90 transition-all ${
               isSprinting
                 ? 'bg-amber-500 border-yellow-200 text-slate-950'
                 : 'bg-slate-900/80 border-slate-600 text-slate-200'
             }`}
             title="Sprint / Run (အပြေး)"
           >
-            <Zap className="w-5 h-5" />
-            <span className="text-[9px] font-semibold leading-none mt-0.5">ပြေး</span>
+            <Zap className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="text-[8px] sm:text-[9px] font-semibold leading-none mt-0.5">ပြေး</span>
           </button>
 
           {/* Jump Button */}
           <button
             onClick={onJump}
-            className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-600 to-yellow-600 border-2 border-yellow-400 text-slate-950 font-bold shadow-xl flex flex-col items-center justify-center active:scale-90 transition-all"
+            className="w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-amber-600 to-yellow-600 border-2 border-yellow-400 text-slate-950 font-bold shadow-xl flex flex-col items-center justify-center active:scale-90 transition-all"
             title="Jump (ခုန်မည်)"
           >
-            <ArrowUp className="w-6 h-6 stroke-[3]" />
-            <span className="text-[9px] font-bold leading-none">ခုန်</span>
+            <ArrowUp className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
+            <span className="text-[8px] sm:text-[9px] font-bold leading-none">ခုန်</span>
           </button>
         </div>
       </div>

@@ -186,6 +186,7 @@ export class GameScene {
       antialias: !isSoftwareGl,
       powerPreference: 'high-performance',
       alpha: false,
+      preserveDrawingBuffer: true,
     });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
@@ -607,6 +608,23 @@ export class GameScene {
       this.character.teleport(loc.position.x, loc.position.z + 5);
       sound.playInteraction();
     }
+  }
+
+  /**
+   * Capture high-res screenshot of current 3D view for Photo Mode
+   */
+  public captureScreenshot(): string {
+    this.renderer.render(this.scene, this.camera);
+    return this.renderer.domElement.toDataURL('image/png');
+  }
+
+  public setCameraFov(fov: number) {
+    this.camera.fov = THREE.MathUtils.clamp(fov, 30, 85);
+    this.camera.updateProjectionMatrix();
+  }
+
+  public getCameraFov(): number {
+    return this.camera.fov;
   }
 
   private handleResize = () => {

@@ -35,6 +35,44 @@ export interface ChatMessage {
   time: string;
   isSelf?: boolean;
   avatarColor: string;
+  recipientId?: string; // If direct message
+  photoUrl?: string;
+  locationName?: string;
+}
+
+export interface DailyTask {
+  id: string;
+  title: string;
+  burmeseTitle: string;
+  description: string;
+  burmeseDesc: string;
+  targetCount: number;
+  currentCount: number;
+  rewardKyats: number;
+  rewardMerit: number;
+  isCompleted: boolean;
+  isClaimed: boolean;
+  iconName: string;
+  locationId: string;
+}
+
+export interface Friend {
+  id: string;
+  name: string;
+  burmeseName: string;
+  status: 'online' | 'busy' | 'offline';
+  statusMessage?: string;
+  currentLocation: string;
+  burmeseLocation: string;
+  avatarColor: string;
+  level: number;
+  position: { x: number; z: number };
+}
+
+export interface PlayerStats {
+  kyats: number;
+  meritPoints: number;
+  level: number;
 }
 
 export interface ColliderBox {
