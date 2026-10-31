@@ -424,37 +424,40 @@ export const HUDOverlay: React.FC<HUDOverlayProps> = ({
                   </button>
                 </div>
 
-                {/* Time of Day */}
-                <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+                {/* Time of Day with Smooth Transition */}
+                <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800" title="Smooth Lighting Environment Transition">
                   <button
                     onClick={() => onTimeOfDayChange('day')}
-                    className={`px-2 py-1 rounded-lg flex items-center gap-1 text-[11px] transition-all ${
+                    className={`px-2 py-1 rounded-lg flex items-center gap-1 text-[11px] transition-all cursor-pointer ${
                       timeOfDay === 'day'
-                        ? 'bg-amber-500 text-slate-950 font-bold'
+                        ? 'bg-amber-500 text-slate-950 font-bold shadow-md ring-1 ring-amber-300'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
+                    title="Switch to Tropical Daylight (နေ့ခင်း)"
                   >
                     <Sun className="w-3.5 h-3.5" />
                     <span>နေ့ (Day)</span>
                   </button>
                   <button
                     onClick={() => onTimeOfDayChange('sunset')}
-                    className={`px-2 py-1 rounded-lg flex items-center gap-1 text-[11px] transition-all ${
+                    className={`px-2 py-1 rounded-lg flex items-center gap-1 text-[11px] transition-all cursor-pointer ${
                       timeOfDay === 'sunset'
-                        ? 'bg-orange-500 text-slate-950 font-bold'
+                        ? 'bg-orange-500 text-slate-950 font-bold shadow-md ring-1 ring-orange-300'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
+                    title="Switch to Pathein River Sunset (ဆည်းဆာ)"
                   >
                     <Sunset className="w-3.5 h-3.5" />
                     <span>ဆည်းဆာ (Sunset)</span>
                   </button>
                   <button
                     onClick={() => onTimeOfDayChange('night')}
-                    className={`px-2 py-1 rounded-lg flex items-center gap-1 text-[11px] transition-all ${
+                    className={`px-2 py-1 rounded-lg flex items-center gap-1 text-[11px] transition-all cursor-pointer ${
                       timeOfDay === 'night'
-                        ? 'bg-indigo-600 text-white font-bold'
+                        ? 'bg-indigo-600 text-white font-bold shadow-md ring-1 ring-indigo-400'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
+                    title="Switch to Night Lanterns & Shwemokhtaw Glow (ညချမ်း)"
                   >
                     <Moon className="w-3.5 h-3.5" />
                     <span>ညချမ်း (Night)</span>

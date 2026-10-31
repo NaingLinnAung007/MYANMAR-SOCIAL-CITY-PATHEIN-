@@ -125,6 +125,78 @@ export const PATHEIN_INTERACTIVES: InteractiveSpot[] = [
   },
 ];
 
+// Lighting preset definition for smooth transitions
+export interface LightingPreset {
+  fogColor: THREE.Color;
+  fogNear: number;
+  fogFar: number;
+  sunColor: THREE.Color;
+  sunIntensity: number;
+  sunPos: THREE.Vector3;
+  hemiSkyColor: THREE.Color;
+  hemiGroundColor: THREE.Color;
+  hemiIntensity: number;
+  ambientColor: THREE.Color;
+  ambientIntensity: number;
+  pagodaGlowColor: THREE.Color;
+  pagodaGlowIntensity: number;
+  streetLightsIntensity: number;
+}
+
+export const LIGHTING_PRESETS: Record<TimeOfDay, LightingPreset> = {
+  day: {
+    fogColor: new THREE.Color(0x7dd3fc), // Tropical light sky blue
+    fogNear: 90,
+    fogFar: 240,
+    sunColor: new THREE.Color(0xfff3c4), // Warm sunlight
+    sunIntensity: 1.85,
+    sunPos: new THREE.Vector3(60, 90, 50),
+    hemiSkyColor: new THREE.Color(0xffffff),
+    hemiGroundColor: new THREE.Color(0x334155),
+    hemiIntensity: 0.8,
+    ambientColor: new THREE.Color(0xfffbeb),
+    ambientIntensity: 0.45,
+    pagodaGlowColor: new THREE.Color(0xf59e0b),
+    pagodaGlowIntensity: 0.6,
+    streetLightsIntensity: 0.0,
+  },
+  sunset: {
+    fogColor: new THREE.Color(0xfdba74), // Vibrant sunset amber/peach
+    fogNear: 80,
+    fogFar: 220,
+    sunColor: new THREE.Color(0xf97316), // Deep orange sun over river
+    sunIntensity: 2.2,
+    sunPos: new THREE.Vector3(-80, 32, -90),
+    hemiSkyColor: new THREE.Color(0xfeb272),
+    hemiGroundColor: new THREE.Color(0x451a03),
+    hemiIntensity: 0.85,
+    ambientColor: new THREE.Color(0xffedd5),
+    ambientIntensity: 0.55,
+    pagodaGlowColor: new THREE.Color(0xf59e0b),
+    pagodaGlowIntensity: 2.8,
+    streetLightsIntensity: 0.65,
+  },
+  night: {
+    fogColor: new THREE.Color(0x090d16), // Deep delta night indigo
+    fogNear: 70,
+    fogFar: 200,
+    sunColor: new THREE.Color(0x60a5fa), // Moonlight silver-blue
+    sunIntensity: 0.45,
+    sunPos: new THREE.Vector3(-40, 70, 40),
+    hemiSkyColor: new THREE.Color(0x1e293b),
+    hemiGroundColor: new THREE.Color(0x0f172a),
+    hemiIntensity: 0.35,
+    ambientColor: new THREE.Color(0x1e1b4b),
+    ambientIntensity: 0.35,
+    pagodaGlowColor: new THREE.Color(0xfbbf24), // Radiant golden stupa
+    pagodaGlowIntensity: 5.0,
+    streetLightsIntensity: 1.6,
+  },
+};
+
+// Reusable math objects for zero GC per frame
+const _tempColor = new THREE.Color();
+
 export class GameScene {
   private container: HTMLDivElement;
   private renderer: THREE.WebGLRenderer;
@@ -142,6 +214,31 @@ export class GameScene {
   public weatherSystem: WeatherSystem;
   private baseFogNear: number = 80;
   private baseFogFar: number = 220;
+
+  // Smooth lighting transition state
+  public isLightingTransitionActive: boolean = false;
+  private lightingTransitionTimer: number = 0;
+  public readonly lightingTransitionDuration: number = 2.0; // 2.0s cinematic transition
+  private targetTimeOfDay: TimeOfDay = 'day';
+  private transitionStartValues = {
+    fogColor: new THREE.Color(0x7dd3fc),
+    fogNear: 90,
+    fogFar: 240,
+    sunColor: new THREE.Color(0xfff3c4),
+    sunIntensity: 1.85,
+    sunPos: new THREE.Vector3(60, 90, 50),
+    hemiSkyColor: new THREE.Color(0xffffff),
+    hemiGroundColor: new THREE.Color(0x334155),
+    hemiIntensity: 0.8,
+    ambientColor: new THREE.Color(0xfffbeb),
+    ambientIntensity: 0.45,
+    pagodaGlowColor: new THREE.Color(0xf59e0b),
+    pagodaGlowIntensity: 0.6,
+    streetLightsIntensity: 0,
+  };
+  private streetLightSources: THREE.PointLight[] = [];
+  private streetLightMaterials: THREE.MeshStandardMaterial[] = [];
+  private currentStreetLightsIntensity: number = 0;
 
   // Animation & game loop
   private animFrameId: number = 0;
@@ -271,8 +368,9 @@ export class GameScene {
     this.weatherSystem = new WeatherSystem();
     this.scene.add(this.weatherSystem.group);
 
-    // Set initial Day lighting
-    this.setTimeOfDay('day');
+    // Initialize decorative street lamps & lanterns and set initial golden sunset lighting instantly
+    this.initStreetLights();
+    this.setTimeOfDay('sunset', true);
 
     // Window resize handler
     window.addEventListener('resize', this.handleResize);
@@ -347,62 +445,184 @@ export class GameScene {
   }
 
   /**
-   * Sets Time of Day lighting theme (Day / Sunset / Night)
+   * Initializes decorative street lanterns and atmospheric promenade lighting
    */
-  public setTimeOfDay(time: TimeOfDay) {
+  private initStreetLights() {
+    const lampPositions = [
+      { x: -38, y: 4.2, z: -73 }, // Riverfront West
+      { x: -20, y: 4.2, z: -73 }, // Riverfront Center / Pier
+      { x: -2, y: 4.2, z: -73 },  // Riverfront East
+      { x: 0, y: 3.8, z: 24 },    // Shwemokhtaw South Entrance arch
+      { x: 24, y: 5.2, z: -11 },  // Downtown Clock Tower junction
+      { x: 55, y: 4.2, z: -11 },  // Downtown Halawa shophouses
+      { x: 45, y: 3.5, z: 45 },   // Social Park Tea Pavilion
+    ];
+
+    lampPositions.forEach(pos => {
+      // Warm golden lantern point light
+      const pLight = new THREE.PointLight(0xfbbf24, 0, 26, 2);
+      pLight.position.set(pos.x, pos.y, pos.z);
+      this.streetLightsGroup.add(pLight);
+      this.streetLightSources.push(pLight);
+
+      // Glowing decorative lantern bulb mesh
+      const bulbMat = new THREE.MeshStandardMaterial({
+        color: 0xffedd5,
+        emissive: 0xf59e0b,
+        emissiveIntensity: 0,
+        roughness: 0.2,
+      });
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 12), bulbMat);
+      bulb.position.set(pos.x, pos.y, pos.z);
+      this.streetLightsGroup.add(bulb);
+      this.streetLightMaterials.push(bulbMat);
+    });
+  }
+
+  /**
+   * Sets intensity for all street lamps and their glowing emissive bulbs
+   */
+  private setStreetLightsIntensity(intensity: number) {
+    this.currentStreetLightsIntensity = intensity;
+    for (let i = 0; i < this.streetLightSources.length; i++) {
+      this.streetLightSources[i].intensity = intensity;
+    }
+    for (let i = 0; i < this.streetLightMaterials.length; i++) {
+      this.streetLightMaterials[i].emissiveIntensity = intensity * 1.2;
+    }
+  }
+
+  /**
+   * Takes snapshot of current active lighting values before starting smooth transition
+   */
+  private snapshotCurrentLighting() {
+    if (this.scene.background instanceof THREE.Color) {
+      this.transitionStartValues.fogColor.copy(this.scene.background);
+    } else if (this.scene.fog instanceof THREE.Fog) {
+      this.transitionStartValues.fogColor.copy(this.scene.fog.color);
+    }
+    this.transitionStartValues.fogNear = this.baseFogNear;
+    this.transitionStartValues.fogFar = this.baseFogFar;
+
+    this.transitionStartValues.sunColor.copy(this.sunLight.color);
+    this.transitionStartValues.sunIntensity = this.sunLight.intensity;
+    this.transitionStartValues.sunPos.copy(this.sunLight.position);
+
+    this.transitionStartValues.hemiSkyColor.copy(this.hemiLight.color);
+    this.transitionStartValues.hemiGroundColor.copy(this.hemiLight.groundColor);
+    this.transitionStartValues.hemiIntensity = this.hemiLight.intensity;
+
+    this.transitionStartValues.ambientColor.copy(this.ambientLight.color);
+    this.transitionStartValues.ambientIntensity = this.ambientLight.intensity;
+
+    this.transitionStartValues.pagodaGlowColor.copy(this.pagodaGlowLight.color);
+    this.transitionStartValues.pagodaGlowIntensity = this.pagodaGlowLight.intensity;
+
+    this.transitionStartValues.streetLightsIntensity = this.currentStreetLightsIntensity;
+  }
+
+  /**
+   * Sets Time of Day with cinematic smooth transition animation
+   */
+  public setTimeOfDay(time: TimeOfDay, instant: boolean = false) {
     this.currentTimeOfDay = time;
+    this.targetTimeOfDay = time;
+    const target = LIGHTING_PRESETS[time];
 
-    if (time === 'day') {
-      // Delta Tropical Daylight
-      this.baseFogNear = 90;
-      this.baseFogFar = 240;
-      this.scene.background = new THREE.Color(0x7dd3fc); // Tropical light sky blue
-      this.scene.fog = new THREE.Fog(0x7dd3fc, 90, 240);
+    if (instant) {
+      this.isLightingTransitionActive = false;
+      this.baseFogNear = target.fogNear;
+      this.baseFogFar = target.fogFar;
 
-      this.sunLight.color.setHex(0xfff3c4);
-      this.sunLight.intensity = 1.85;
-      this.sunLight.position.set(60, 90, 50);
+      if (this.scene.background instanceof THREE.Color) {
+        this.scene.background.copy(target.fogColor);
+      } else {
+        this.scene.background = target.fogColor.clone();
+      }
 
-      this.hemiLight.color.setHex(0xffffff);
-      this.hemiLight.groundColor.setHex(0x334155);
-      this.hemiLight.intensity = 0.8;
+      if (this.scene.fog instanceof THREE.Fog) {
+        this.scene.fog.color.copy(target.fogColor);
+        this.scene.fog.near = target.fogNear;
+        this.scene.fog.far = target.fogFar;
+      } else {
+        this.scene.fog = new THREE.Fog(target.fogColor.getHex(), target.fogNear, target.fogFar);
+      }
 
-      this.ambientLight.intensity = 0.45;
-      this.pagodaGlowLight.intensity = 0.6;
-    } else if (time === 'sunset') {
-      // Golden Hour Pathein Sunset over Ayeyarwady River (Breathtaking Myanmar golden light)
-      this.baseFogNear = 80;
-      this.baseFogFar = 220;
-      this.scene.background = new THREE.Color(0xfdba74); // Vibrant sunset amber/peach
-      this.scene.fog = new THREE.Fog(0xfdba74, 80, 220);
+      this.sunLight.color.copy(target.sunColor);
+      this.sunLight.intensity = target.sunIntensity;
+      this.sunLight.position.copy(target.sunPos);
 
-      this.sunLight.color.setHex(0xf97316); // Deep orange/amber sun
-      this.sunLight.intensity = 2.2;
-      this.sunLight.position.set(-80, 32, -90); // Low angle over the river
+      this.hemiLight.color.copy(target.hemiSkyColor);
+      this.hemiLight.groundColor.copy(target.hemiGroundColor);
+      this.hemiLight.intensity = target.hemiIntensity;
 
-      this.hemiLight.color.setHex(0xfeb272);
-      this.hemiLight.groundColor.setHex(0x451a03);
-      this.hemiLight.intensity = 0.85;
+      this.ambientLight.color.copy(target.ambientColor);
+      this.ambientLight.intensity = target.ambientIntensity;
 
-      this.ambientLight.intensity = 0.55;
-      this.pagodaGlowLight.intensity = 2.4;
+      this.pagodaGlowLight.color.copy(target.pagodaGlowColor);
+      this.pagodaGlowLight.intensity = target.pagodaGlowIntensity;
+
+      this.setStreetLightsIntensity(target.streetLightsIntensity);
+      return;
+    }
+
+    // Smooth transition from current active lighting state
+    this.snapshotCurrentLighting();
+    this.lightingTransitionTimer = 0;
+    this.isLightingTransitionActive = true;
+  }
+
+  /**
+   * Smoothly interpolates all lighting, sun position, fog, and street lamps per frame
+   */
+  private updateLightingTransition(dt: number) {
+    this.lightingTransitionTimer += dt;
+    const rawProgress = Math.min(this.lightingTransitionTimer / this.lightingTransitionDuration, 1.0);
+    // Smoothstep cubic easing: 3t^2 - 2t^3 for organic cinematic flow
+    const t = rawProgress * rawProgress * (3 - 2 * rawProgress);
+
+    const start = this.transitionStartValues;
+    const target = LIGHTING_PRESETS[this.targetTimeOfDay];
+
+    // 1. Sky background & Fog color
+    _tempColor.copy(start.fogColor).lerp(target.fogColor, t);
+    if (this.scene.background instanceof THREE.Color) {
+      this.scene.background.copy(_tempColor);
     } else {
-      // Night Lantern & Golden Stupa Glow (ညချမ်း ပုသိမ်မြို့)
-      this.baseFogNear = 70;
-      this.baseFogFar = 200;
-      this.scene.background = new THREE.Color(0x090d16); // Deep delta night indigo
-      this.scene.fog = new THREE.Fog(0x090d16, 70, 200);
+      this.scene.background = _tempColor.clone();
+    }
+    if (this.scene.fog instanceof THREE.Fog) {
+      this.scene.fog.color.copy(_tempColor);
+    }
 
-      this.sunLight.color.setHex(0x60a5fa); // Moonlight silver-blue
-      this.sunLight.intensity = 0.45;
-      this.sunLight.position.set(-40, 70, 40);
+    // Fog distances
+    this.baseFogNear = THREE.MathUtils.lerp(start.fogNear, target.fogNear, t);
+    this.baseFogFar = THREE.MathUtils.lerp(start.fogFar, target.fogFar, t);
 
-      this.hemiLight.color.setHex(0x1e293b);
-      this.hemiLight.groundColor.setHex(0x0f172a);
-      this.hemiLight.intensity = 0.35;
+    // 2. Sun Directional Light (Color, Intensity, and Solar Arc Position)
+    this.sunLight.color.copy(start.sunColor).lerp(target.sunColor, t);
+    this.sunLight.intensity = THREE.MathUtils.lerp(start.sunIntensity, target.sunIntensity, t);
+    this.sunLight.position.lerpVectors(start.sunPos, target.sunPos, t);
 
-      this.ambientLight.intensity = 0.35;
-      this.pagodaGlowLight.intensity = 5.0; // Pagoda stupa radiates gold in night
+    // 3. Hemisphere Sky / Ground Light
+    this.hemiLight.color.copy(start.hemiSkyColor).lerp(target.hemiSkyColor, t);
+    this.hemiLight.groundColor.copy(start.hemiGroundColor).lerp(target.hemiGroundColor, t);
+    this.hemiLight.intensity = THREE.MathUtils.lerp(start.hemiIntensity, target.hemiIntensity, t);
+
+    // 4. Ambient Light
+    this.ambientLight.color.copy(start.ambientColor).lerp(target.ambientColor, t);
+    this.ambientLight.intensity = THREE.MathUtils.lerp(start.ambientIntensity, target.ambientIntensity, t);
+
+    // 5. Pagoda Golden Glow
+    this.pagodaGlowLight.color.copy(start.pagodaGlowColor).lerp(target.pagodaGlowColor, t);
+    this.pagodaGlowLight.intensity = THREE.MathUtils.lerp(start.pagodaGlowIntensity, target.pagodaGlowIntensity, t);
+
+    // 6. Street lanterns & promenade lighting
+    const streetInt = THREE.MathUtils.lerp(start.streetLightsIntensity, target.streetLightsIntensity, t);
+    this.setStreetLightsIntensity(streetInt);
+
+    if (rawProgress >= 1.0) {
+      this.isLightingTransitionActive = false;
     }
   }
 
@@ -452,7 +672,11 @@ export class GameScene {
     const dt = Math.min(this.clock.getDelta(), 0.1);
     const elapsedTime = this.clock.getElapsedTime();
 
-    // 1. Water, umbrellas dynamic motion, and dynamic tropical weather
+    // 1. Smooth lighting transition, dynamic water ripples, umbrellas, and tropical weather
+    if (this.isLightingTransitionActive) {
+      this.updateLightingTransition(dt);
+    }
+
     if (this.updateWaterFn) {
       this.updateWaterFn(elapsedTime);
     }

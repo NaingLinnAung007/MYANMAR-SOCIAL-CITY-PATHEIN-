@@ -262,7 +262,7 @@ export default function App() {
     // Instantiate Three.js game world
     const game = new GameScene(canvasMountRef.current);
     gameSceneRef.current = game;
-    game.setTimeOfDay('sunset'); // Start with the iconic golden sunset
+    game.setTimeOfDay('sunset', true); // Start with the iconic golden sunset immediately
     sound.setDistrictAmbient('shwemokhtaw'); // Start with sacred Shwemokhtaw chanting
 
     // Wire up proximity listeners
@@ -491,7 +491,8 @@ export default function App() {
   const handleTimeOfDayChange = (time: TimeOfDay) => {
     setTimeOfDay(time);
     if (gameSceneRef.current) {
-      gameSceneRef.current.setTimeOfDay(time);
+      gameSceneRef.current.setTimeOfDay(time, false); // Cinematic smooth lighting blend
+      sound.playWindChimes(); // Sacred Pathein Pagoda spire wind chimes tinkling
       sound.playInteraction();
     }
   };
