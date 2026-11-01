@@ -106,11 +106,55 @@ export const PATHEIN_INTERACTIVES: InteractiveSpot[] = [
     title: 'Sit for Myanmar Tea',
     burmeseTitle: 'လက်ဖက်ရည် သောက်ထိုင်မည်',
     actionText: 'Sit at Table',
-    burmeseActionText: 'ထိုင်မည်',
+    burmeseActionText: 'ထိုင်မည် (Sit/Stand)',
     position: { x: 47, y: 0.5, z: 45 },
-    radius: 3.5,
+    radius: 4.0,
     type: 'tea',
     description: 'Enjoy sweet Myanmar tea and endless hot plain tea (ရေနွေးကြမ်း) with friends.',
+  },
+  {
+    id: 'park_cinema',
+    title: 'Watch Outdoor Cinema',
+    burmeseTitle: 'ပန်းခြံ ရုပ်ရှင် ကြည့်မည်',
+    actionText: 'Watch Movie',
+    burmeseActionText: 'ရုပ်ရှင်ကြည့်မည်',
+    position: { x: 55, y: 0.5, z: 28 },
+    radius: 5.5,
+    type: 'cinema',
+    description: 'Enjoy open-air cinema screen broadcasting scenic Pathein river vistas and cultural shows.',
+  },
+  {
+    id: 'park_coaster',
+    title: 'Ride Delta Roller Coaster',
+    burmeseTitle: 'ဒယ်လ်တာ ရိုလာကိုစတာ စီးမည်',
+    actionText: 'Ride Coaster',
+    burmeseActionText: 'ရိုလာကိုစတာစီးမည်',
+    position: { x: 20, y: 0.5, z: 20 },
+    radius: 5.0,
+    type: 'coaster',
+    description: 'Experience an exhilarating high-speed aerial rollercoaster tour of Pathein delta landscape.',
+  },
+  {
+    id: 'park_radio',
+    title: 'Tune Myanmar Radio',
+    burmeseTitle: 'မြန်မာ့အသံ ရေဒီယို ဖွင့်မည်',
+    actionText: 'Play Radio',
+    burmeseActionText: 'ရေဒီယိုဖွင့်မည်',
+    position: { x: 51, y: 0.8, z: 40 },
+    radius: 4.0,
+    type: 'tea',
+    description: 'Listen to classical Myanmar Mahagita harp melodies and relaxing tea shop tunes.',
+  },
+  {
+    id: 'water_gun_stand',
+    title: 'Equip Water Gun Toy',
+    burmeseTitle: 'သကြန် ရေပြွတ်သေနတ် ကိုင်မည်',
+    actionText: 'Equip Water Gun',
+    burmeseActionText: 'ရေပြွတ်ကိုင်မည်',
+    position: { x: -20, y: 0.5, z: -68 },
+    radius: 4.5,
+    type: 'water_gun',
+    description: 'Cool off with a fun water gun toy by the Pathein riverfront promenade.',
   },
   {
     id: 'river_sunset',
@@ -254,6 +298,13 @@ export class GameScene {
   public cameraDistance: number = 7.5;
   private cinematicTimer: number = 0;
 
+  // Coaster Ride mode
+  public isCoasterActive: boolean = false;
+  private coasterTimer: number = 0;
+
+  // Click to move marker
+  private targetMarker!: THREE.Mesh;
+
   // Collision system
   public colliders: ColliderBox[] = [];
 
@@ -363,6 +414,20 @@ export class GameScene {
     // 6. Character Controller
     this.character = new CharacterController();
     this.scene.add(this.character.group);
+
+    // Click-to-move destination indicator ring
+    const ringGeo = new THREE.RingGeometry(0.45, 0.65, 32);
+    ringGeo.rotateX(-Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xfbbf24,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+    this.targetMarker = new THREE.Mesh(ringGeo, ringMat);
+    this.targetMarker.position.y = 0.08;
+    this.scene.add(this.targetMarker);
 
     // 7. Dynamic Weather System (Tropical Rain over Pathein riverfront)
     this.weatherSystem = new WeatherSystem();
@@ -692,6 +757,13 @@ export class GameScene {
       this.scene.fog.far = THREE.MathUtils.lerp(this.baseFogFar, 145, rainInt * 0.6);
     }
 
+    // Target indicator ring animation
+    if (this.targetMarker && (this.targetMarker.material as THREE.MeshBasicMaterial).opacity > 0) {
+      const mat = this.targetMarker.material as THREE.MeshBasicMaterial;
+      mat.opacity = Math.max(0, mat.opacity - dt * 1.4);
+      this.targetMarker.scale.multiplyScalar(1 + dt * 0.4);
+    }
+
     // 2. Camera positioning relative to character
     this.updateCamera(dt, elapsedTime);
 
@@ -708,6 +780,22 @@ export class GameScene {
    * Camera behavior for Third-person, First-person, and Cinematic Drone Tour
    */
   private updateCamera(dt: number, time: number) {
+    if (this.isCoasterActive) {
+      this.coasterTimer += dt * 0.32;
+      const t = this.coasterTimer * Math.PI * 2;
+      const camX = 20 + Math.cos(t) * 24;
+      const camZ = 20 + Math.sin(t) * 24;
+      const camY = 8.5 + Math.sin(t * 3) * 5;
+
+      this.camera.position.set(camX, camY, camZ);
+      this.camera.lookAt(20, 2, 20);
+
+      if (this.coasterTimer >= 1.0) {
+        this.isCoasterActive = false;
+      }
+      return;
+    }
+
     const charPos = this.character.position;
 
     if (this.cameraMode === 'cinematic') {
@@ -747,6 +835,51 @@ export class GameScene {
 
       this.camera.lookAt(targetLook);
     }
+  }
+
+  /**
+   * Free 360-degree camera rotation
+   */
+  public rotateCamera(deltaYaw: number, deltaPitch: number) {
+    this.cameraAngleYaw -= deltaYaw;
+    this.cameraAnglePitch = Math.max(-0.25, Math.min(1.35, this.cameraAnglePitch + deltaPitch));
+  }
+
+  /**
+   * Smooth zoom in and out
+   */
+  public zoomCamera(deltaDist: number) {
+    this.cameraDistance = THREE.MathUtils.clamp(this.cameraDistance + deltaDist, 2.0, 22.0);
+  }
+
+  /**
+   * Click-to-Move ground pathing
+   */
+  public clickToMove(clientX: number, clientY: number) {
+    const rect = this.container.getBoundingClientRect();
+    const mouseX = ((clientX - rect.left) / rect.width) * 2 - 1;
+    const mouseY = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), this.camera);
+    const intersects = raycaster.intersectObjects(this.scene.children, true);
+
+    for (const hit of intersects) {
+      if (hit.point.y < 1.4 && Math.abs(hit.point.x) < 118 && Math.abs(hit.point.z) < 74) {
+        this.character.targetDestination = new THREE.Vector3(hit.point.x, 0, hit.point.z);
+        this.targetMarker.position.set(hit.point.x, 0.08, hit.point.z);
+        this.targetMarker.scale.set(1, 1, 1);
+        (this.targetMarker.material as THREE.MeshBasicMaterial).opacity = 0.95;
+        sound.playInteraction();
+        break;
+      }
+    }
+  }
+
+  public startCoasterRide() {
+    this.isCoasterActive = true;
+    this.coasterTimer = 0;
+    sound.playRiverWater();
   }
 
   /**
@@ -814,11 +947,19 @@ export class GameScene {
       this.character.setAction('pray');
       sound.playPagodaBell();
     } else if (spot.type === 'tea' || spot.type === 'sit') {
-      this.character.setAction('sit');
-      sound.playInteraction();
+      this.character.toggleSit();
     } else if (spot.type === 'halawa') {
       sound.playInteraction();
     } else if (spot.type === 'scenic') {
+      sound.playRiverWater();
+    } else if (spot.type === 'cinema') {
+      sound.playRadioTune();
+      this.character.setAction('wave');
+    } else if (spot.type === 'coaster') {
+      this.startCoasterRide();
+    } else if (spot.type === 'water_gun') {
+      this.character.toggleWaterGun(true);
+      this.character.setAction('water_gun');
       sound.playRiverWater();
     }
   }

@@ -3,7 +3,8 @@ import {
   Sun, Sunset, Moon, Volume2, VolumeX, Eye, Camera,
   BookOpen, MessageSquare, ChevronDown, ChevronUp,
   MapPin, Sparkles, User, Coffee, Navigation, CloudRain,
-  Award, Coins, Users, Flame
+  Award, Coins, Users, Flame, Mic, MicOff, Plus, Minus,
+  Heart, Smile, ThumbsUp, Waves
 } from 'lucide-react';
 import { CameraMode, CharacterAction, DailyTask, Friend, InteractiveSpot, LocationInfo, PlayerStats, TimeOfDay, WeatherType } from '../types';
 import { Minimap } from './Minimap';
@@ -26,6 +27,10 @@ interface HUDOverlayProps {
   onOpenFriends: () => void;
   onOpenMap: () => void;
   onEnterPhotoMode: () => void;
+  onOpenAccount: () => void;
+  playerName: string;
+  isVoiceActive: boolean;
+  onToggleVoice: () => void;
   dailyTasks: DailyTask[];
   friends: Friend[];
   playerStats: PlayerStats;
@@ -36,6 +41,7 @@ interface HUDOverlayProps {
   unreadChatCount: number;
   isHoldingUmbrella: boolean;
   onToggleUmbrella: () => void;
+  onCameraZoom?: (delta: number) => void;
 }
 
 export const HUDOverlay: React.FC<HUDOverlayProps> = ({
@@ -56,6 +62,10 @@ export const HUDOverlay: React.FC<HUDOverlayProps> = ({
   onOpenFriends,
   onOpenMap,
   onEnterPhotoMode,
+  onOpenAccount,
+  playerName,
+  isVoiceActive,
+  onToggleVoice,
   dailyTasks,
   friends,
   playerStats,
@@ -66,6 +76,7 @@ export const HUDOverlay: React.FC<HUDOverlayProps> = ({
   unreadChatCount,
   isHoldingUmbrella,
   onToggleUmbrella,
+  onCameraZoom,
 }) => {
   const [isDockCollapsed, setIsDockCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<'emotes' | 'environment' | 'social'>('emotes');
@@ -142,6 +153,16 @@ export const HUDOverlay: React.FC<HUDOverlayProps> = ({
         <div className="flex flex-col items-end gap-2 pointer-events-auto">
           {/* Row 1: Player Stats & Quick Game Action Pills */}
           <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            {/* Account & Avatar Customizer Button */}
+            <button
+              onClick={onOpenAccount}
+              className="px-2.5 sm:px-3 py-1 rounded-xl bg-gradient-to-r from-amber-500/25 to-yellow-500/20 hover:from-amber-500/40 hover:to-yellow-500/30 border border-amber-400/70 text-amber-200 shadow text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+              title="Account & Character Customizer (အကောင့် & ဇာတ်ကောင် စိတ်ကြိုက်ပြင်ဆင်ရန်)"
+            >
+              <User className="w-3.5 h-3.5 text-amber-300" />
+              <span className="max-w-[80px] sm:max-w-none truncate">{playerName || 'ပုသိမ်သား'}</span>
+            </button>
+
             {/* Player Stats Pill */}
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950/85 border border-amber-500/40 shadow text-[11px]">
               <div className="flex items-center gap-1 text-amber-300 font-bold" title="Player Level">
@@ -199,8 +220,22 @@ export const HUDOverlay: React.FC<HUDOverlayProps> = ({
             </button>
           </div>
 
-          {/* Row 2: Secondary buttons: Weather, Chat, Guide, Mute */}
+          {/* Row 2: Secondary buttons: Voice Mic, Weather, Chat, Guide, Mute */}
           <div className="flex items-center gap-1.5">
+            {/* Simulated Voice Chat Mic button */}
+            <button
+              onClick={onToggleVoice}
+              className={`px-2.5 py-1 rounded-xl border shadow text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all cursor-pointer ${
+                isVoiceActive
+                  ? 'bg-emerald-600/90 border-emerald-300 text-white animate-pulse'
+                  : 'bg-slate-900/85 border-amber-500/30 text-slate-300 hover:text-amber-200'
+              }`}
+              title="Voice Chat Mic (အသံဖြင့် စကားပြော မိုက်ဖွင့်/ပိတ် M key)"
+            >
+              {isVoiceActive ? <Mic className="w-3.5 h-3.5 text-emerald-200" /> : <MicOff className="w-3.5 h-3.5 text-slate-400" />}
+              <span className="hidden sm:inline text-[11px]">{isVoiceActive ? 'မိုက်ဖွင့်' : 'မိုက်ပိတ်'}</span>
+            </button>
+
             {/* Weather System Toggle Button */}
             <button
               onClick={onToggleWeather}
@@ -364,33 +399,82 @@ export const HUDOverlay: React.FC<HUDOverlayProps> = ({
               </button>
             </div>
 
-            {/* Tab 2: Myanmar Traditional Emotes */}
+            {/* Tab 2: Myanmar Traditional Emotes (Keys 1-8) */}
             {activeTab === 'emotes' && (
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full">
                 <button
                   onClick={() => onTriggerEmote('bow')}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-700 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
+                  title="Press [1] key"
                 >
+                  <span className="w-4 h-4 rounded-full bg-slate-700 text-amber-300 text-[9px] font-bold flex items-center justify-center">1</span>
                   <span>မင်္ဂလာပါ (Bow)</span>
                 </button>
                 <button
                   onClick={() => onTriggerEmote('pray')}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-700 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
+                  title="Press [2] key"
                 >
+                  <span className="w-4 h-4 rounded-full bg-slate-700 text-amber-300 text-[9px] font-bold flex items-center justify-center">2</span>
                   <span>ရှိခိုးမည် (Pray)</span>
                 </button>
                 <button
                   onClick={() => onTriggerEmote('umbrella_dance')}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-700 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
+                  title="Press [3] key"
                 >
+                  <span className="w-4 h-4 rounded-full bg-slate-700 text-amber-300 text-[9px] font-bold flex items-center justify-center">3</span>
                   <span>ထီးအက (Umbrella)</span>
                 </button>
                 <button
-                  onClick={() => onTriggerEmote('sit')}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-700 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
+                  onClick={() => onTriggerEmote('tea_cheers')}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
+                  title="Press [4] key"
                 >
-                  <Coffee className="w-3.5 h-3.5" />
-                  <span>ထိုင်မည် (Sit)</span>
+                  <span className="w-4 h-4 rounded-full bg-slate-700 text-amber-300 text-[9px] font-bold flex items-center justify-center">4</span>
+                  <Coffee className="w-3 h-3 text-amber-300" />
+                  <span>ချီးယားစ် (Cheers)</span>
+                </button>
+                <button
+                  onClick={() => onTriggerEmote('wave')}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
+                  title="Press [5] key"
+                >
+                  <span className="w-4 h-4 rounded-full bg-slate-700 text-amber-300 text-[9px] font-bold flex items-center justify-center">5</span>
+                  <span>လက်ပြ (Wave)</span>
+                </button>
+                <button
+                  onClick={() => onTriggerEmote('clap')}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
+                  title="Press [6] key"
+                >
+                  <span className="w-4 h-4 rounded-full bg-slate-700 text-amber-300 text-[9px] font-bold flex items-center justify-center">6</span>
+                  <span>လက်ခုပ် (Clap)</span>
+                </button>
+                <button
+                  onClick={() => onTriggerEmote('laugh')}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
+                  title="Press [7] key"
+                >
+                  <span className="w-4 h-4 rounded-full bg-slate-700 text-amber-300 text-[9px] font-bold flex items-center justify-center">7</span>
+                  <span>ရယ်မော (Laugh)</span>
+                </button>
+                <button
+                  onClick={() => onTriggerEmote('water_gun')}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
+                  title="Press [8] key"
+                >
+                  <span className="w-4 h-4 rounded-full bg-slate-700 text-amber-300 text-[9px] font-bold flex items-center justify-center">8</span>
+                  <Waves className="w-3 h-3 text-cyan-400" />
+                  <span>ရေပက် (Water Gun)</span>
+                </button>
+                <button
+                  onClick={() => onTriggerEmote('sit')}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
+                  title="Press [E] key"
+                >
+                  <span className="w-4 h-4 rounded-full bg-slate-700 text-amber-300 text-[9px] font-bold flex items-center justify-center">E</span>
+                  <span>ထိုင်/ထ (Sit/Stand)</span>
                 </button>
               </div>
             )}

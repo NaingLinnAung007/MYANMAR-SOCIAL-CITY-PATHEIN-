@@ -9,8 +9,9 @@ import { FriendsModal } from './ui/FriendsModal';
 import { PatheinMapModal } from './ui/PatheinMapModal';
 import { PhotoModeOverlay } from './ui/PhotoModeOverlay';
 import { LevelUpModal } from './ui/LevelUpModal';
+import { AccountCustomizerModal } from './ui/AccountCustomizerModal';
 import {
-  CameraMode, CharacterAction, ChatMessage, DailyTask,
+  CameraMode, CharacterAction, CharacterAppearance, ChatMessage, DailyTask,
   Friend, InteractiveSpot, LocationInfo, PlayerStats,
   TimeOfDay, WeatherType
 } from './types';
@@ -139,10 +140,10 @@ const INITIAL_FRIENDS: Friend[] = [
     burmeseName: 'မသူဇာ',
     status: 'online',
     currentLocation: 'Shwemokhtaw Pagoda',
-    burmeseLocation: 'ရွှေမုဋ္ဌောဘုရား',
+    burmeseLocation: 'ရွှေမုဋ္ဌောဘုရားရင်ပြင်',
     avatarColor: '#ec4899',
-    level: 5,
-    position: { x: 5, z: 15 },
+    level: 3,
+    position: { x: 5, z: 12 },
   },
   {
     id: 'f2',
@@ -150,32 +151,32 @@ const INITIAL_FRIENDS: Friend[] = [
     burmeseName: 'ကိုအောင်',
     status: 'online',
     currentLocation: 'Pathein Riverfront',
-    burmeseLocation: 'ပုသိမ်မြစ်ကမ်းနား',
+    burmeseLocation: 'ပုသိမ်မြစ်ကမ်းနား လမ်းမ',
     avatarColor: '#3b82f6',
-    level: 7,
-    position: { x: -20, z: -68 },
+    level: 5,
+    position: { x: -25, z: -65 },
   },
   {
     id: 'f3',
-    name: 'Min Khant',
-    burmeseName: 'မင်းခန့်',
-    status: 'online',
-    currentLocation: 'Thiri Ayeyar Tea Cafe',
-    burmeseLocation: 'သီရိဧရာ လက်ဖက်ရည်ဆိုင်',
-    avatarColor: '#f59e0b',
-    level: 4,
-    position: { x: 47, z: 46 },
-  },
-  {
-    id: 'f4',
     name: 'Daw Hla',
     burmeseName: 'ဒေါ်လှလှ',
     status: 'busy',
-    currentLocation: 'Pathein Umbrella Market',
+    currentLocation: 'Umbrella Market',
     burmeseLocation: 'ပုသိမ်ထီးဈေးတန်း',
     avatarColor: '#10b981',
-    level: 6,
-    position: { x: -50, z: 2 },
+    level: 4,
+    position: { x: -48, z: 5 },
+  },
+  {
+    id: 'f4',
+    name: 'Min Khant',
+    burmeseName: 'မင်းခန့်',
+    status: 'online',
+    currentLocation: 'Tea Cafe & Park',
+    burmeseLocation: 'သီရိဧရာ လက်ဖက်ရည်ဝိုင်း',
+    avatarColor: '#f59e0b',
+    level: 2,
+    position: { x: 42, z: 42 },
   },
   {
     id: 'f5',
@@ -194,10 +195,15 @@ export default function App() {
   const canvasMountRef = useRef<HTMLDivElement>(null);
   const gameSceneRef = useRef<GameScene | null>(null);
 
-  // Movement & Input states
+  // Movement & Input refs (Persistent for zero-glitch 60fps loop)
   const moveInputRef = useRef<{ x: number; z: number }>({ x: 0, z: 0 });
-  const [isSprinting, setIsSprinting] = useState<boolean>(false);
+  const isSprintingRef = useRef<boolean>(false);
   const isJumpingRef = useRef<boolean>(false);
+  const nearInteractiveRef = useRef<InteractiveSpot | null>(null);
+  const currentDistrictRef = useRef<LocationInfo | null>(null);
+
+  // Display state for HUD
+  const [isSprinting, setIsSprinting] = useState<boolean>(false);
 
   // Camera Drag on Desktop
   const isMouseDownRef = useRef<boolean>(false);
@@ -211,6 +217,22 @@ export default function App() {
   const [cameraMode, setCameraMode] = useState<CameraMode>('third_person');
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isHoldingUmbrella, setIsHoldingUmbrella] = useState<boolean>(false);
+  const [isVoiceActive, setIsVoiceActive] = useState<boolean>(false);
+
+  // Character & Account Customizer State (teatalkshop style)
+  const [isAccountOpen, setIsAccountOpen] = useState<boolean>(false);
+  const [appearance, setAppearance] = useState<CharacterAppearance>({
+    gender: 'male',
+    shirtColor: '#f8fafc',
+    longyiColor: '#1e3a8a',
+    longyiPattern: 'traditional',
+    hairColor: '#111827',
+    hasThanaka: true,
+    hasUmbrella: false,
+    hasWaterGun: false,
+    accountCode: 'PTS-7749-AYEYAR',
+    playerName: 'ပုသိမ်သား (Pathein Traveler)',
+  });
 
   // Daily Tasks & Player Stats
   const [dailyTasks, setDailyTasks] = useState<DailyTask[]>(INITIAL_DAILY_TASKS);
@@ -219,6 +241,7 @@ export default function App() {
     kyats: 150,
     meritPoints: 200,
     level: 1,
+    luckyDrawCount: 0,
   });
 
   // Modals & Chat
@@ -256,17 +279,31 @@ export default function App() {
     );
   };
 
+  const checkInteractiveTasks = (spot: InteractiveSpot) => {
+    if (spot.type === 'bell') {
+      completeTask('task_bell');
+    } else if (spot.type === 'halawa') {
+      completeTask('task_halawa');
+    } else if (spot.type === 'umbrella') {
+      completeTask('task_umbrella');
+    } else if (spot.type === 'tea' || spot.type === 'sit') {
+      completeTask('task_tea_chat');
+    }
+  };
+
+  // Main Three.js Lifecycle - Mounts ONCE
   useEffect(() => {
     if (!canvasMountRef.current) return;
 
     // Instantiate Three.js game world
     const game = new GameScene(canvasMountRef.current);
     gameSceneRef.current = game;
-    game.setTimeOfDay('sunset', true); // Start with the iconic golden sunset immediately
-    sound.setDistrictAmbient('shwemokhtaw'); // Start with sacred Shwemokhtaw chanting
+    game.setTimeOfDay('sunset', true); // Start with iconic golden sunset
+    sound.setDistrictAmbient('shwemokhtaw'); // Start with sacred chanting
 
     // Wire up proximity listeners
     game.onDistrictChange = loc => {
+      currentDistrictRef.current = loc;
       setCurrentDistrict(loc);
       if (loc) {
         sound.setDistrictAmbient(loc.id);
@@ -281,6 +318,7 @@ export default function App() {
     };
 
     game.onNearbyInteractive = spot => {
+      nearInteractiveRef.current = spot;
       setNearInteractive(spot);
     };
 
@@ -293,41 +331,8 @@ export default function App() {
       }
     }, 100);
 
-    // Keyboard handlers (WASD / Arrows / Shift / Space / E)
+    // Keyboard handlers (WASD / Arrows / Shift / Space / E / 1-8 / M)
     const activeKeys: Record<string, boolean> = {};
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't capture when typing in inputs
-      if (document.activeElement?.tagName === 'INPUT') return;
-
-      activeKeys[e.code] = true;
-
-      if (e.code === 'KeyE') {
-        if (nearInteractive && gameSceneRef.current) {
-          gameSceneRef.current.triggerInteraction(nearInteractive);
-          checkInteractiveTasks(nearInteractive);
-        }
-      } else if (e.code === 'KeyU') {
-        if (gameSceneRef.current) {
-          gameSceneRef.current.character.toggleUmbrella();
-          const holding = gameSceneRef.current.character.isHoldingUmbrella;
-          setIsHoldingUmbrella(holding);
-          if (holding) completeTask('task_umbrella');
-        }
-      } else if (e.code === 'Space') {
-        isJumpingRef.current = true;
-      }
-
-      updateMoveInputFromKeys();
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      activeKeys[e.code] = false;
-      if (e.code === 'Space') {
-        isJumpingRef.current = false;
-      }
-      updateMoveInputFromKeys();
-    };
 
     const updateMoveInputFromKeys = () => {
       let x = 0;
@@ -346,16 +351,86 @@ export default function App() {
       }
 
       moveInputRef.current = { x, z };
-      setIsSprinting(!!activeKeys['ShiftLeft'] || !!activeKeys['ShiftRight']);
+      const sprinting = !!activeKeys['ShiftLeft'] || !!activeKeys['ShiftRight'];
+      isSprintingRef.current = sprinting;
+      setIsSprinting(sprinting);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't capture when typing in text inputs
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+
+      activeKeys[e.code] = true;
+
+      if (e.code === 'KeyE') {
+        // E key: interact if near spot, else toggle sit on tea stool!
+        if (nearInteractiveRef.current && gameSceneRef.current) {
+          gameSceneRef.current.triggerInteraction(nearInteractiveRef.current);
+          checkInteractiveTasks(nearInteractiveRef.current);
+        } else if (gameSceneRef.current) {
+          gameSceneRef.current.character.toggleSit();
+        }
+      } else if (e.code === 'KeyU') {
+        if (gameSceneRef.current) {
+          gameSceneRef.current.character.toggleUmbrella();
+          const holding = gameSceneRef.current.character.isHoldingUmbrella;
+          setIsHoldingUmbrella(holding);
+          if (holding) completeTask('task_umbrella');
+        }
+      } else if (e.code === 'Space') {
+        isJumpingRef.current = true;
+      } else if (e.code === 'KeyM') {
+        // Toggle Voice Chat Mic
+        setIsVoiceActive(prev => {
+          const next = !prev;
+          sound.playInteraction();
+          return next;
+        });
+      } else if (e.code === 'Digit1') {
+        gameSceneRef.current?.character.setAction('bow');
+      } else if (e.code === 'Digit2') {
+        gameSceneRef.current?.character.setAction('pray');
+      } else if (e.code === 'Digit3') {
+        gameSceneRef.current?.character.setAction('umbrella_dance');
+      } else if (e.code === 'Digit4') {
+        gameSceneRef.current?.character.setAction('tea_cheers');
+      } else if (e.code === 'Digit5') {
+        gameSceneRef.current?.character.setAction('wave');
+      } else if (e.code === 'Digit6') {
+        gameSceneRef.current?.character.setAction('clap');
+      } else if (e.code === 'Digit7') {
+        gameSceneRef.current?.character.setAction('laugh');
+      } else if (e.code === 'Digit8') {
+        gameSceneRef.current?.character.setAction('water_gun');
+      } else if (e.code === 'Equal' || e.code === 'NumpadAdd') {
+        gameSceneRef.current?.zoomCamera(-1.2);
+      } else if (e.code === 'Minus' || e.code === 'NumpadSubtract') {
+        gameSceneRef.current?.zoomCamera(1.2);
+      }
+
+      updateMoveInputFromKeys();
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      activeKeys[e.code] = false;
+      if (e.code === 'Space') {
+        isJumpingRef.current = false;
+      }
+      updateMoveInputFromKeys();
     };
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
-    // Desktop Mouse Drag to rotate camera
+    // Desktop Mouse Drag to rotate camera 360 & Click-to-Move on ground
+    let mouseDownPos = { x: 0, y: 0 };
+    let mouseDownTime = 0;
+
     const handleMouseDown = (e: MouseEvent) => {
       if ((e.target as HTMLElement)?.closest('.pointer-events-auto')) return;
       isMouseDownRef.current = true;
+      mouseDownPos = { x: e.clientX, y: e.clientY };
+      mouseDownTime = Date.now();
       lastMousePosRef.current = { x: e.clientX, y: e.clientY };
       sound.startAmbientAtmosphere();
     };
@@ -366,23 +441,29 @@ export default function App() {
       const dy = e.clientY - lastMousePosRef.current.y;
       lastMousePosRef.current = { x: e.clientX, y: e.clientY };
 
-      gameSceneRef.current.cameraAngleYaw -= dx * 0.005;
-      gameSceneRef.current.cameraAnglePitch = Math.max(
-        0.05,
-        Math.min(1.2, gameSceneRef.current.cameraAnglePitch + dy * 0.004)
-      );
+      // Full 360-degree free camera orbit
+      gameSceneRef.current.rotateCamera(dx * 0.005, dy * 0.004);
     };
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e: MouseEvent) => {
+      if (isMouseDownRef.current && gameSceneRef.current) {
+        const dx = Math.abs(e.clientX - mouseDownPos.x);
+        const dy = Math.abs(e.clientY - mouseDownPos.y);
+        const clickDuration = Date.now() - mouseDownTime;
+
+        // If mouse didn't drag and was a quick click, raycast to walk there (Click to move)
+        if (dx < 6 && dy < 6 && clickDuration < 400) {
+          if (!(e.target as HTMLElement)?.closest('.pointer-events-auto')) {
+            gameSceneRef.current.clickToMove(e.clientX, e.clientY);
+          }
+        }
+      }
       isMouseDownRef.current = false;
     };
 
     const handleWheel = (e: WheelEvent) => {
       if (!gameSceneRef.current) return;
-      gameSceneRef.current.cameraDistance = Math.max(
-        3.5,
-        Math.min(18.0, gameSceneRef.current.cameraDistance + e.deltaY * 0.01)
-      );
+      gameSceneRef.current.zoomCamera(e.deltaY * 0.01);
     };
 
     window.addEventListener('mousedown', handleMouseDown);
@@ -390,7 +471,7 @@ export default function App() {
     window.addEventListener('mouseup', handleMouseUp);
     window.addEventListener('wheel', handleWheel, { passive: true });
 
-    // Character tick pump
+    // 60FPS Character Physics & Animation Pump
     let characterAnimId = 0;
     let lastTime = performance.now();
     const characterTick = () => {
@@ -402,7 +483,7 @@ export default function App() {
         gameSceneRef.current.character.update(
           dt,
           moveInputRef.current,
-          isSprinting,
+          isSprintingRef.current,
           isJumpingRef.current,
           gameSceneRef.current.cameraAngleYaw,
           gameSceneRef.current.colliders
@@ -425,7 +506,7 @@ export default function App() {
       sound.stopAmbient();
       sound.stopDistrictAmbient();
     };
-  }, [isSprinting, nearInteractive]);
+  }, []); // Run ONCE on mount
 
   // Touch handlers
   const handleVirtualJoystickMove = (move: { x: number; z: number }) => {
@@ -435,29 +516,26 @@ export default function App() {
 
   const handleMobileCameraRotate = (deltaX: number, deltaY: number) => {
     if (!gameSceneRef.current) return;
-    gameSceneRef.current.cameraAngleYaw -= deltaX;
-    gameSceneRef.current.cameraAnglePitch = Math.max(
-      0.05,
-      Math.min(1.2, gameSceneRef.current.cameraAnglePitch + deltaY)
-    );
+    gameSceneRef.current.rotateCamera(deltaX, deltaY);
+  };
+
+  const handleCameraZoom = (delta: number) => {
+    if (!gameSceneRef.current) return;
+    gameSceneRef.current.zoomCamera(delta);
+    sound.playInteraction();
   };
 
   const handleJump = () => {
-    if (gameSceneRef.current) {
-      gameSceneRef.current.character.setAction('jump');
-    }
+    isJumpingRef.current = true;
+    setTimeout(() => {
+      isJumpingRef.current = false;
+    }, 280);
   };
 
-  const checkInteractiveTasks = (spot: InteractiveSpot) => {
-    if (spot.type === 'bell') {
-      completeTask('task_bell');
-    } else if (spot.type === 'halawa') {
-      completeTask('task_halawa');
-    } else if (spot.type === 'umbrella') {
-      completeTask('task_umbrella');
-    } else if (spot.type === 'tea' || spot.type === 'sit') {
-      completeTask('task_tea_chat');
-    }
+  const handleSprintToggle = (sprint: boolean) => {
+    isSprintingRef.current = sprint;
+    setIsSprinting(sprint);
+    sound.playInteraction();
   };
 
   const handleInteractiveTrigger = () => {
@@ -537,7 +615,6 @@ export default function App() {
     setPlayerStats(prev => {
       const newKyats = prev.kyats + targetTask.rewardKyats;
       const newMerit = prev.meritPoints + targetTask.rewardMerit;
-      // Calculate level: player starts at lv 1 (200 merit). Each task completed gives 50 merit which triggers a level up!
       const newLevel = Math.max(prev.level, Math.floor((newMerit - 150) / 45) + 1);
 
       if (newLevel > prev.level) {
@@ -549,6 +626,7 @@ export default function App() {
       }
 
       return {
+        ...prev,
         kyats: newKyats,
         meritPoints: newMerit,
         level: newLevel,
@@ -562,8 +640,8 @@ export default function App() {
     const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     const photoMessage: ChatMessage = {
       id: `photo_msg_${Date.now()}`,
-      sender: 'Player',
-      burmeseSender: 'ကစားသမား',
+      sender: appearance.playerName || 'Player',
+      burmeseSender: appearance.playerName || 'ကစားသမား',
       text: caption,
       time: timeStr,
       isSelf: true,
@@ -580,6 +658,42 @@ export default function App() {
     if (gameSceneRef.current) {
       gameSceneRef.current.setCameraFov(fov);
     }
+  };
+
+  // Appearance & Avatar update
+  const handleUpdateAppearance = (newApp: Partial<CharacterAppearance>) => {
+    setAppearance(prev => {
+      const updated = { ...prev, ...newApp };
+      if (gameSceneRef.current) {
+        gameSceneRef.current.character.setAppearance(updated);
+      }
+      return updated;
+    });
+  };
+
+  // Voice Chat Toggle
+  const handleToggleVoice = () => {
+    setIsVoiceActive(prev => {
+      const next = !prev;
+      sound.playInteraction();
+      if (next) {
+        const now = new Date();
+        const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+        setMessages(m => [
+          ...m,
+          {
+            id: `voice_${Date.now()}`,
+            sender: '🎙️ Voice Chat',
+            burmeseSender: 'အသံပြောစကားဝိုင်း',
+            text: `${appearance.playerName} မိုက်ဖွင့်၍ အသံဖြင့် စကားစတင်ပြောနေပါသည်...`,
+            time: timeStr,
+            avatarColor: '#10b981',
+            isVoiceSim: true,
+          },
+        ]);
+      }
+      return next;
+    });
   };
 
   // Friends System Handlers
@@ -600,7 +714,6 @@ export default function App() {
 
     setFriends(prev => [newFriend, ...prev]);
 
-    // Add celebration chat message from newly added friend
     const now = new Date();
     const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     const botMsg: ChatMessage = {
@@ -638,8 +751,8 @@ export default function App() {
     const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     const newMsg: ChatMessage = {
       id: `self_${Date.now()}`,
-      sender: 'You (ဧည့်သည်)',
-      burmeseSender: 'သင်',
+      sender: appearance.playerName,
+      burmeseSender: appearance.playerName,
       text,
       time: timeStr,
       isSelf: true,
@@ -651,7 +764,7 @@ export default function App() {
     // Mark tea chat task complete if talking
     completeTask('task_tea_chat');
 
-    // Simulated reply from recipient or random resident
+    // Simulated reply from recipient or resident
     setTimeout(() => {
       let responder = activeDirectFriend || friends[0];
       const responses = [
@@ -705,6 +818,10 @@ export default function App() {
           onOpenFriends={() => setIsFriendsOpen(true)}
           onOpenMap={() => setIsMapOpen(true)}
           onEnterPhotoMode={() => setIsPhotoMode(true)}
+          onOpenAccount={() => setIsAccountOpen(true)}
+          playerName={appearance.playerName}
+          isVoiceActive={isVoiceActive}
+          onToggleVoice={handleToggleVoice}
           dailyTasks={dailyTasks}
           friends={friends}
           playerStats={playerStats}
@@ -715,6 +832,7 @@ export default function App() {
           unreadChatCount={unreadChatCount}
           isHoldingUmbrella={isHoldingUmbrella}
           onToggleUmbrella={handleUmbrellaToggle}
+          onCameraZoom={handleCameraZoom}
         />
       )}
 
@@ -722,18 +840,23 @@ export default function App() {
       {!isPhotoMode && (
         <VirtualJoystick
           onMove={handleVirtualJoystickMove}
-          onSprintToggle={setIsSprinting}
+          onSprintToggle={handleSprintToggle}
           onJump={handleJump}
+          onSitToggle={() => {
+            gameSceneRef.current?.character.toggleSit();
+          }}
+          isSitting={gameSceneRef.current?.character.isSitting || false}
           onAction={handleInteractiveTrigger}
           onUmbrellaToggle={handleUmbrellaToggle}
           isHoldingUmbrella={isHoldingUmbrella}
           isSprinting={isSprinting}
           nearActionLabel={nearInteractive ? nearInteractive.burmeseActionText : null}
           onCameraRotate={handleMobileCameraRotate}
+          onCameraZoom={handleCameraZoom}
         />
       )}
 
-      {/* Photo Mode Overlay (Full Viewfinder, Filters, Watermark, & In-App Sharing) */}
+      {/* Photo Mode Overlay */}
       <PhotoModeOverlay
         isActive={isPhotoMode}
         onClose={() => setIsPhotoMode(false)}
@@ -742,6 +865,16 @@ export default function App() {
         onShareToChat={handleSharePhotoToChat}
         onSetCameraFov={handleSetCameraFov}
         currentFov={cameraFov}
+      />
+
+      {/* Account & Avatar Customizer Modal (teatalkshop.fun inspired) */}
+      <AccountCustomizerModal
+        isOpen={isAccountOpen}
+        onClose={() => setIsAccountOpen(false)}
+        appearance={appearance}
+        onUpdateAppearance={handleUpdateAppearance}
+        playerStats={playerStats}
+        onUpdateStats={newStats => setPlayerStats(prev => ({ ...prev, ...newStats }))}
       />
 
       {/* Social Chat Modal with Public & Direct Friends Tabs */}

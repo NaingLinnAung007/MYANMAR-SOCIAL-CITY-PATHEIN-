@@ -770,6 +770,98 @@ class SoundSystem {
     osc2.start(t + 0.08);
     osc2.stop(t + 0.15);
   }
+
+  /**
+   * Myanmar Traditional Radio Harp/Xylophone Tune (မြန်မာ့သံစဉ် ရေဒီယို သီချင်းသံ)
+   */
+  public playRadioTune() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    // Pentatonic Myanmar classical notes (ပဉ္စမသံစဉ် - C, D, E, G, A)
+    const notes = [523.25, 587.33, 659.25, 783.99, 880.0, 783.99, 659.25, 587.33, 523.25];
+    const now = this.ctx.currentTime;
+
+    notes.forEach((freq, idx) => {
+      if (!this.ctx) return;
+      const noteTime = now + idx * 0.22;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, noteTime);
+
+      gain.gain.setValueAtTime(0.12, noteTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, noteTime + 0.45);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(noteTime);
+      osc.stop(noteTime + 0.5);
+    });
+  }
+
+  /**
+   * Lucky Draw Dice Roll (🎲 ကံစမ်းမဲ လှည့်သံ)
+   */
+  public playLuckyDrawRoll() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    const t = this.ctx.currentTime;
+    for (let i = 0; i < 7; i++) {
+      const clickTime = t + i * 0.06;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(300 + Math.random() * 400, clickTime);
+
+      gain.gain.setValueAtTime(0.08, clickTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, clickTime + 0.04);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(clickTime);
+      osc.stop(clickTime + 0.05);
+    }
+  }
+
+  /**
+   * Lucky Draw Golden Win (🎲 ရွှေဆုကြီး ပေါက်သံ)
+   */
+  public playLuckyDrawWin() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    const chords = [523.25, 659.25, 783.99, 1046.5];
+    const t = this.ctx.currentTime;
+
+    chords.forEach((freq, i) => {
+      if (!this.ctx) return;
+      const noteTime = t + i * 0.1;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, noteTime);
+
+      gain.gain.setValueAtTime(0.16, noteTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, noteTime + 1.2);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(noteTime);
+      osc.stop(noteTime + 1.25);
+    });
+  }
 }
 
 export const sound = new SoundSystem();
+

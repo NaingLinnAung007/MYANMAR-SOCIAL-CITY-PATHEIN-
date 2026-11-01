@@ -4,7 +4,35 @@ export type WeatherType = 'clear' | 'tropical_rain';
 
 export type CameraMode = 'third_person' | 'first_person' | 'cinematic';
 
-export type CharacterAction = 'idle' | 'walk' | 'run' | 'jump' | 'sit' | 'pray' | 'bow' | 'umbrella_dance';
+export type CharacterGender = 'male' | 'female';
+
+export type CharacterAction =
+  | 'idle'
+  | 'walk'
+  | 'run'
+  | 'jump'
+  | 'sit'
+  | 'pray'
+  | 'bow'
+  | 'umbrella_dance'
+  | 'tea_cheers'
+  | 'wave'
+  | 'clap'
+  | 'laugh'
+  | 'water_gun';
+
+export interface CharacterAppearance {
+  gender: CharacterGender;
+  shirtColor: string;
+  longyiColor: string;
+  longyiPattern: string;
+  hairColor: string;
+  hasThanaka: boolean;
+  hasUmbrella: boolean;
+  hasWaterGun: boolean;
+  accountCode: string;
+  playerName: string;
+}
 
 export interface LocationInfo {
   id: string;
@@ -23,7 +51,7 @@ export interface InteractiveSpot {
   burmeseActionText: string;
   position: { x: number; y: number; z: number };
   radius: number;
-  type: 'bell' | 'halawa' | 'tea' | 'umbrella' | 'pray' | 'scenic' | 'sit';
+  type: 'bell' | 'halawa' | 'tea' | 'umbrella' | 'pray' | 'scenic' | 'sit' | 'cinema' | 'coaster' | 'water_gun';
   description: string;
 }
 
@@ -38,6 +66,7 @@ export interface ChatMessage {
   recipientId?: string; // If direct message
   photoUrl?: string;
   locationName?: string;
+  isVoiceSim?: boolean;
 }
 
 export interface DailyTask {
@@ -73,6 +102,7 @@ export interface PlayerStats {
   kyats: number;
   meritPoints: number;
   level: number;
+  luckyDrawCount: number;
 }
 
 export interface ColliderBox {
@@ -83,3 +113,4 @@ export interface ColliderBox {
   minY?: number;
   maxY?: number;
 }
+

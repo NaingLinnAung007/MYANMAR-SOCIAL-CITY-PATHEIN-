@@ -162,6 +162,27 @@ export function buildSocialPark(colliders: ColliderBox[]): THREE.Group {
     });
   });
 
+  // 8. 3D Outdoor Cinema (ပုသိမ် ပန်းခြံ ရုပ်ရှင်ရုံကြီး)
+  const cinema = createOutdoorCinema();
+  cinema.position.set(58, 0.25, 26);
+  cinema.rotation.y = -Math.PI / 4;
+  parkGroup.add(cinema);
+
+  colliders.push({
+    minX: 54, maxX: 62,
+    minZ: 22, maxZ: 30,
+  });
+
+  // 9. 3D Delta Roller Coaster Track & Cart (ပုသိမ် အပျော်စီး ရိုလာကိုစတာ)
+  const coaster = createRollerCoaster();
+  coaster.position.set(20, 0.2, 20);
+  parkGroup.add(coaster);
+
+  // 10. Myanmar Traditional Radio Player (မြန်မာ့အသံ ရေဒီယို) on tea shop counter
+  const radio = createRadioPlayer();
+  radio.position.set(51, 1.45, 39);
+  parkGroup.add(radio);
+
   return parkGroup;
 }
 
@@ -443,3 +464,201 @@ function createFrangipaniTree(): THREE.Group {
 
   return tree;
 }
+
+/**
+ * Creates 3D Outdoor Cinema (ပုသိမ် ပန်းခြံ ရုပ်ရှင်ရုံကြီး)
+ */
+function createOutdoorCinema(): THREE.Group {
+  const cinema = new THREE.Group();
+
+  // Steel Truss Frame
+  const trussMat = new THREE.MeshStandardMaterial({
+    color: 0x334155,
+    metalness: 0.8,
+    roughness: 0.3,
+  });
+
+  const base = new THREE.Mesh(new THREE.BoxGeometry(8.5, 0.4, 2.5), trussMat);
+  base.position.y = 0.2;
+  cinema.add(base);
+
+  const leftPillar = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 6.0, 8), trussMat);
+  leftPillar.position.set(-3.8, 3.0, 0);
+  cinema.add(leftPillar);
+
+  const rightPillar = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 6.0, 8), trussMat);
+  rightPillar.position.set(3.8, 3.0, 0);
+  cinema.add(rightPillar);
+
+  // Big Screen Border
+  const frame = new THREE.Mesh(
+    new THREE.BoxGeometry(7.4, 4.4, 0.2),
+    new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.5 })
+  );
+  frame.position.set(0, 3.5, 0);
+  cinema.add(frame);
+
+  // Glowing Projection Screen with Canvas Texture
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 288;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    // Sky gradient
+    const grad = ctx.createLinearGradient(0, 0, 0, 288);
+    grad.addColorStop(0, '#0284c7');
+    grad.addColorStop(0.5, '#f59e0b');
+    grad.addColorStop(1, '#b45309');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 512, 288);
+
+    // River silhouette
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 220, 512, 68);
+
+    // Golden pagoda spire silhouette
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.moveTo(256, 80);
+    ctx.lineTo(240, 220);
+    ctx.lineTo(272, 220);
+    ctx.closePath();
+    ctx.fill();
+
+    // Cinema title banner
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(40, 30, 432, 50);
+    ctx.fillStyle = '#fef08a';
+    ctx.font = 'bold 22px Myanmar, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🎬 ပုသိမ် ရုပ်ရှင်ရုံကြီး (Pathein Cinema)', 256, 62);
+  }
+
+  const screenTex = new THREE.CanvasTexture(canvas);
+  const screenMat = new THREE.MeshStandardMaterial({
+    map: screenTex,
+    emissive: 0xffedd5,
+    emissiveIntensity: 0.35,
+    roughness: 0.2,
+  });
+
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(7.0, 4.0), screenMat);
+  screen.position.set(0, 3.5, 0.12);
+  cinema.add(screen);
+
+  return cinema;
+}
+
+/**
+ * Creates 3D Delta Roller Coaster (ပုသိမ် အပျော်စီး ရိုလာကိုစတာ)
+ */
+function createRollerCoaster(): THREE.Group {
+  const coaster = new THREE.Group();
+
+  const railMat = new THREE.MeshStandardMaterial({
+    color: 0xf59e0b,
+    metalness: 0.8,
+    roughness: 0.2,
+  });
+
+  const supportMat = new THREE.MeshStandardMaterial({
+    color: 0xd97706,
+    metalness: 0.6,
+    roughness: 0.4,
+  });
+
+  // Track points along delta park
+  const curvePoints = [
+    new THREE.Vector3(0, 1.5, 0),
+    new THREE.Vector3(12, 4.5, -6),
+    new THREE.Vector3(18, 8.0, 8),
+    new THREE.Vector3(10, 10.5, 18),
+    new THREE.Vector3(-4, 6.0, 15),
+    new THREE.Vector3(-10, 3.5, 4),
+    new THREE.Vector3(0, 1.5, 0),
+  ];
+
+  const curve = new THREE.CatmullRomCurve3(curvePoints, true);
+  const tubeGeo = new THREE.TubeGeometry(curve, 64, 0.14, 8, true);
+  const track = new THREE.Mesh(tubeGeo, railMat);
+  coaster.add(track);
+
+  // Vertical support pylons
+  curvePoints.slice(0, 6).forEach(pt => {
+    const pylon = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, pt.y, 6), supportMat);
+    pylon.position.set(pt.x, pt.y / 2, pt.z);
+    coaster.add(pylon);
+  });
+
+  // Coaster Cart at station
+  const cart = new THREE.Group();
+  const cartBody = new THREE.Mesh(
+    new THREE.BoxGeometry(1.6, 0.8, 1.0),
+    new THREE.MeshStandardMaterial({ color: 0xef4444, metalness: 0.6, roughness: 0.3 })
+  );
+  cartBody.position.y = 0.4;
+  cart.add(cartBody);
+
+  // Wheels
+  const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111827 });
+  for (let wx = -0.6; wx <= 0.6; wx += 1.2) {
+    for (let wz = -0.55; wz <= 0.55; wz += 1.1) {
+      const w = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.1, 8), wheelMat);
+      w.rotation.x = Math.PI / 2;
+      w.position.set(wx, 0.1, wz);
+      cart.add(w);
+    }
+  }
+
+  cart.position.set(0, 1.6, 0);
+  coaster.add(cart);
+
+  return coaster;
+}
+
+/**
+ * Creates Myanmar Radio Player (မြန်မာ့အသံ ရေဒီယို)
+ */
+function createRadioPlayer(): THREE.Group {
+  const radio = new THREE.Group();
+
+  const woodMat = new THREE.MeshStandardMaterial({
+    color: 0x78350f,
+    roughness: 0.6,
+  });
+
+  const grillMat = new THREE.MeshStandardMaterial({
+    color: 0xfef08a,
+    roughness: 0.4,
+  });
+
+  // Radio wooden body
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.55, 0.4), woodMat);
+  radio.add(body);
+
+  // Speaker grill
+  const grill = new THREE.Mesh(new THREE.CircleGeometry(0.18, 16), grillMat);
+  grill.position.set(-0.2, 0.05, 0.21);
+  radio.add(grill);
+
+  // Dial knob
+  const knob = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.06, 0.06, 0.08, 8),
+    new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.8 })
+  );
+  knob.rotation.x = Math.PI / 2;
+  knob.position.set(0.22, 0.08, 0.22);
+  radio.add(knob);
+
+  // Antenna
+  const antenna = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.01, 0.015, 0.7, 4),
+    new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9 })
+  );
+  antenna.position.set(0.3, 0.55, -0.1);
+  antenna.rotation.z = -0.25;
+  radio.add(antenna);
+
+  return radio;
+}
+
