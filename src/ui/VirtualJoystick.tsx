@@ -82,6 +82,13 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
     const maxRadius = rect.width / 2 - 12;
 
     const distance = Math.sqrt(dx * dx + dy * dy);
+    // Deadzone to prevent micro-jitter
+    if (distance < 7) {
+      setThumbPos({ x: 0, y: 0 });
+      onMove({ x: 0, z: 0 });
+      return;
+    }
+
     const clampedDist = Math.min(distance, maxRadius);
     const angle = Math.atan2(dy, dx);
 
@@ -90,9 +97,11 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
 
     setThumbPos({ x: thumbX, y: thumbY });
 
-    // Normalized move vector (-1 to 1)
-    const normX = thumbX / maxRadius;
-    const normZ = -thumbY / maxRadius; // Forward is negative Y on screen
+    // Normalized move vector (-1 to 1) with ergonomic exponential curve
+    const ratio = clampedDist / maxRadius;
+    const smoothFactor = ratio * ratio; // Cubic/Quadratic response for precision
+    const normX = (thumbX / clampedDist) * smoothFactor;
+    const normZ = (-thumbY / clampedDist) * smoothFactor;
     onMove({ x: normX, z: normZ });
   };
 
@@ -111,7 +120,8 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
         const dy = touch.clientY - lastTouchPos.current.y;
         lastTouchPos.current = { x: touch.clientX, y: touch.clientY };
 
-        onCameraRotate(dx * 0.006, dy * 0.005);
+        // Comfortably calibrated swipe sensitivity
+        onCameraRotate(dx * 0.0038, dy * 0.003);
         break;
       }
     }
@@ -135,64 +145,64 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
         onTouchMove={handleLookMove}
         onTouchEnd={handleLookEnd}
         onTouchCancel={handleLookEnd}
-        className="absolute top-20 right-0 bottom-44 left-1/3 z-10 touch-none pointer-events-auto"
+        className="absolute top-24 right-0 bottom-40 left-1/2 z-10 touch-none pointer-events-auto"
         aria-hidden="true"
       />
 
-      {/* Mobile Virtual Joystick on Bottom Left */}
-      <div className="absolute bottom-4 left-4 sm:bottom-6 sm:left-6 z-20 pointer-events-auto select-none touch-none">
+      {/* Mobile Virtual Joystick on Bottom Left - Clean & Ergonomic */}
+      <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 landscape:bottom-2.5 landscape:left-4 z-20 pointer-events-auto select-none touch-none opacity-85 hover:opacity-100 transition-opacity">
         <div
           ref={joystickBaseRef}
           onTouchStart={handleJoystickStart}
           onTouchMove={handleJoystickMove}
           onTouchEnd={handleJoystickEnd}
           onTouchCancel={handleJoystickEnd}
-          className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-slate-950/80 border-2 border-amber-500/40 shadow-2xl flex items-center justify-center backdrop-blur-sm"
+          className="relative w-24 h-24 sm:w-28 sm:h-28 landscape:w-24 landscape:h-24 rounded-full bg-slate-950/75 border-2 border-amber-500/35 shadow-2xl flex items-center justify-center backdrop-blur-md"
         >
           {/* Directional markers */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none">
-            <Compass className="w-14 h-14 sm:w-16 sm:h-16 text-amber-400" />
+          <div className="absolute inset-0 flex items-center justify-center opacity-25 pointer-events-none">
+            <Compass className="w-12 h-12 sm:w-14 sm:h-14 landscape:w-12 landscape:h-12 text-amber-400" />
           </div>
 
           {/* Draggable thumb */}
           <div
-            className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full shadow-lg border-2 border-amber-400 flex items-center justify-center transition-transform duration-75 ${
-              isDragging ? 'bg-amber-500 text-slate-950 scale-105' : 'bg-amber-600/80 text-amber-100'
+            className={`w-10 h-10 sm:w-12 sm:h-12 landscape:w-10 landscape:h-10 rounded-full shadow-lg border-2 border-amber-400 flex items-center justify-center transition-transform duration-75 ${
+              isDragging ? 'bg-amber-500 text-slate-950 scale-105' : 'bg-amber-600/75 text-amber-100'
             }`}
             style={{
               transform: `translate(${thumbPos.x}px, ${thumbPos.y}px)`,
             }}
           >
-            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-amber-200" />
+            <div className="w-2.5 h-2.5 rounded-full bg-amber-200" />
           </div>
         </div>
-        <div className="text-center mt-1 text-[10px] font-bold text-amber-300 tracking-wider">
-          လမ်းလျှောက် (MOVE)
+        <div className="text-center mt-0.5 text-[8px] sm:text-[9px] font-bold text-amber-300/80 tracking-wider">
+          MOVE
         </div>
       </div>
 
       {/* Quick Camera Zoom (+/-) buttons on right screen border */}
       {onCameraZoom && (
-        <div className="absolute right-4 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-2 pointer-events-auto select-none">
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 landscape:right-3 z-20 flex flex-col gap-1.5 sm:gap-2 pointer-events-auto select-none">
           <button
             onClick={() => onCameraZoom(-1.5)}
-            className="w-9 h-9 rounded-full bg-slate-900/80 hover:bg-amber-600 border border-amber-500/50 text-amber-200 font-bold flex items-center justify-center shadow-lg active:scale-90 transition-all cursor-pointer"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-900/80 hover:bg-amber-600 border border-amber-500/50 text-amber-200 font-bold flex items-center justify-center shadow-lg active:scale-90 transition-all cursor-pointer"
             title="Zoom In (အနီးသို့ ချဲ့မည် ＋)"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
           <button
             onClick={() => onCameraZoom(1.5)}
-            className="w-9 h-9 rounded-full bg-slate-900/80 hover:bg-amber-600 border border-amber-500/50 text-amber-200 font-bold flex items-center justify-center shadow-lg active:scale-90 transition-all cursor-pointer"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-900/80 hover:bg-amber-600 border border-amber-500/50 text-amber-200 font-bold flex items-center justify-center shadow-lg active:scale-90 transition-all cursor-pointer"
             title="Zoom Out (အဝေးသို့ ချုံ့မည် －)"
           >
-            <Minus className="w-4 h-4" />
+            <Minus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
         </div>
       )}
 
-      {/* Action Buttons on Bottom Right */}
-      <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 z-20 flex flex-col items-end gap-2 sm:gap-2.5 pointer-events-auto select-none">
+      {/* Action Buttons on Bottom Right - Ergonomically spaced for landscape thumbs */}
+      <div className="absolute bottom-3 right-3 sm:bottom-6 sm:right-6 landscape:bottom-2.5 landscape:right-4 z-20 flex flex-col items-end gap-1.5 sm:gap-2.5 pointer-events-auto select-none opacity-85 hover:opacity-100 transition-opacity">
         {/* Context Interaction Button (e.g. Ring Bell, Taste Halawa, Sit, Ride Coaster) */}
         {nearActionLabel && (
           <button
@@ -209,10 +219,10 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
           {onSitToggle && (
             <button
               onClick={onSitToggle}
-              className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full border shadow-lg flex flex-col items-center justify-center active:scale-90 transition-all ${
+              className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full border shadow-lg flex flex-col items-center justify-center active:scale-90 transition-all backdrop-blur-md ${
                 isSitting
-                  ? 'bg-amber-500 border-yellow-200 text-slate-950 ring-2 ring-amber-400'
-                  : 'bg-slate-900/80 border-slate-600 text-amber-300'
+                  ? 'bg-amber-500/90 border-yellow-200 text-slate-950 ring-2 ring-amber-400'
+                  : 'bg-slate-900/60 border-amber-500/30 text-amber-300 hover:bg-slate-900/90'
               }`}
               title="Sit / Stand (လက်ဖက်ရည်ဆိုင် ကုလားထိုင် ထိုင်မည်/ထမည်)"
             >
@@ -226,10 +236,10 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
           {/* Umbrella toggle button */}
           <button
             onClick={onUmbrellaToggle}
-            className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full border shadow-lg flex flex-col items-center justify-center active:scale-90 transition-all ${
+            className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full border shadow-lg flex flex-col items-center justify-center active:scale-90 transition-all backdrop-blur-md ${
               isHoldingUmbrella
-                ? 'bg-red-600 border-red-300 text-white'
-                : 'bg-slate-900/80 border-slate-600 text-amber-300'
+                ? 'bg-red-600/90 border-red-300 text-white'
+                : 'bg-slate-900/60 border-amber-500/30 text-amber-300 hover:bg-slate-900/90'
             }`}
             title="Pathein Umbrella (ပုသိမ်ထီး)"
           >
@@ -240,10 +250,10 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
           {/* Sprint Toggle */}
           <button
             onClick={() => onSprintToggle(!isSprinting)}
-            className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full border shadow-lg flex flex-col items-center justify-center active:scale-90 transition-all ${
+            className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full border shadow-lg flex flex-col items-center justify-center active:scale-90 transition-all backdrop-blur-md ${
               isSprinting
-                ? 'bg-amber-500 border-yellow-200 text-slate-950 ring-2 ring-yellow-400'
-                : 'bg-slate-900/80 border-slate-600 text-slate-200'
+                ? 'bg-amber-500/90 border-yellow-200 text-slate-950 ring-2 ring-yellow-400'
+                : 'bg-slate-900/60 border-amber-500/30 text-slate-200 hover:bg-slate-900/90'
             }`}
             title="Sprint / Run (ပြေး)"
           >
@@ -254,7 +264,7 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
           {/* Jump Button */}
           <button
             onClick={onJump}
-            className="w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-amber-600 via-amber-500 to-yellow-500 border-2 border-yellow-300 text-slate-950 font-black shadow-2xl flex flex-col items-center justify-center active:scale-90 transition-all"
+            className="w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-amber-600/90 via-amber-500/90 to-yellow-500/90 border-2 border-yellow-300 text-slate-950 font-black shadow-2xl flex flex-col items-center justify-center active:scale-90 transition-all backdrop-blur-md"
             title="Jump (ခုန်မည်)"
           >
             <ArrowUp className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />

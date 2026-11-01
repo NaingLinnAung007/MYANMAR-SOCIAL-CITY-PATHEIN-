@@ -10,9 +10,11 @@ import { PatheinMapModal } from './ui/PatheinMapModal';
 import { PhotoModeOverlay } from './ui/PhotoModeOverlay';
 import { LevelUpModal } from './ui/LevelUpModal';
 import { AccountCustomizerModal } from './ui/AccountCustomizerModal';
+import { WeatherVisualOverlay } from './ui/WeatherVisualOverlay';
+import { TeaShopMenuModal } from './ui/TeaShopMenuModal';
 import {
   CameraMode, CharacterAction, CharacterAppearance, ChatMessage, DailyTask,
-  Friend, InteractiveSpot, LocationInfo, PlayerStats,
+  Friend, InteractiveSpot, LocationInfo, PlayerStats, TeaMenuItem,
   TimeOfDay, WeatherType
 } from './types';
 import { sound } from './audio/soundSystem';
@@ -242,6 +244,7 @@ export default function App() {
     meritPoints: 200,
     level: 1,
     luckyDrawCount: 0,
+    energy: 100,
   });
 
   // Modals & Chat
@@ -251,6 +254,7 @@ export default function App() {
   const [isFriendsOpen, setIsFriendsOpen] = useState<boolean>(false);
   const [isMapOpen, setIsMapOpen] = useState<boolean>(false);
   const [isPhotoMode, setIsPhotoMode] = useState<boolean>(false);
+  const [isTeaMenuOpen, setIsTeaMenuOpen] = useState<boolean>(false);
   const [cameraFov, setCameraFov] = useState<number>(55);
   const [levelUpData, setLevelUpData] = useState<{
     newLevel: number;
@@ -463,7 +467,7 @@ export default function App() {
 
     const handleWheel = (e: WheelEvent) => {
       if (!gameSceneRef.current) return;
-      gameSceneRef.current.zoomCamera(e.deltaY * 0.01);
+      gameSceneRef.current.zoomCamera(e.deltaY * 0.006);
     };
 
     window.addEventListener('mousedown', handleMouseDown);
@@ -542,6 +546,9 @@ export default function App() {
     if (nearInteractive && gameSceneRef.current) {
       gameSceneRef.current.triggerInteraction(nearInteractive);
       checkInteractiveTasks(nearInteractive);
+      if (nearInteractive.type === 'tea') {
+        setIsTeaMenuOpen(true);
+      }
     }
   };
 
@@ -564,6 +571,37 @@ export default function App() {
         completeTask('task_river_rain');
       }
     }
+  };
+
+  const handleSelectWeather = (newWeather: WeatherType) => {
+    if (gameSceneRef.current) {
+      gameSceneRef.current.setWeather(newWeather);
+      setWeather(newWeather);
+      sound.playInteraction();
+
+      if (newWeather === 'tropical_rain' && currentDistrict?.id === 'riverfront') {
+        completeTask('task_river_rain');
+      }
+    }
+  };
+
+  const handleOrderTeaSuccess = (item: TeaMenuItem) => {
+    sound.playTeaPour();
+    gameSceneRef.current?.character.setAction('tea_cheers');
+    completeTask('task_tea_chat');
+
+    const now = new Date();
+    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const teaMessage: ChatMessage = {
+      id: `tea_order_${Date.now()}`,
+      sender: appearance.playerName || 'Player',
+      burmeseSender: appearance.playerName || 'ကစားသမား',
+      text: `☕ ${item.burmeseName} (${item.name}) မှာယူသုံးဆောင်လိုက်ပါပြီ! စွမ်းအင် +${item.energyBonus} ရရှိပါသည်။`,
+      time: timeStr,
+      isSelf: true,
+      avatarColor: '#f59e0b',
+    };
+    setMessages(prev => [...prev, teaMessage]);
   };
 
   const handleTimeOfDayChange = (time: TimeOfDay) => {
@@ -795,6 +833,9 @@ export default function App() {
       {/* 3D WebGL Canvas Container */}
       <div ref={canvasMountRef} className="absolute inset-0 w-full h-full" />
 
+      {/* Dynamic Weather-Specific Visual Overlay (Falling leaves, sunset flares, rain drops) */}
+      <WeatherVisualOverlay weather={weather} opacity={0.88} />
+
       {/* Primary HUD Overlay - Hidden during Photo Mode */}
       {!isPhotoMode && (
         <HUDOverlay
@@ -805,6 +846,7 @@ export default function App() {
           onTimeOfDayChange={handleTimeOfDayChange}
           weather={weather}
           onToggleWeather={handleToggleWeather}
+          onSelectWeather={handleSelectWeather}
           cameraMode={cameraMode}
           onCameraModeChange={handleCameraModeChange}
           isMuted={isMuted}
@@ -819,6 +861,7 @@ export default function App() {
           onOpenMap={() => setIsMapOpen(true)}
           onEnterPhotoMode={() => setIsPhotoMode(true)}
           onOpenAccount={() => setIsAccountOpen(true)}
+          onOpenTeaMenu={() => setIsTeaMenuOpen(true)}
           playerName={appearance.playerName}
           isVoiceActive={isVoiceActive}
           onToggleVoice={handleToggleVoice}
@@ -865,6 +908,15 @@ export default function App() {
         onShareToChat={handleSharePhotoToChat}
         onSetCameraFov={handleSetCameraFov}
         currentFov={cameraFov}
+      />
+
+      {/* Myanmar Tea Shop Ordering & Gathering Menu Modal */}
+      <TeaShopMenuModal
+        isOpen={isTeaMenuOpen}
+        onClose={() => setIsTeaMenuOpen(false)}
+        playerStats={playerStats}
+        onUpdateStats={newStats => setPlayerStats(prev => ({ ...prev, ...newStats }))}
+        onOrderSuccess={handleOrderTeaSuccess}
       />
 
       {/* Account & Avatar Customizer Modal (teatalkshop.fun inspired) */}

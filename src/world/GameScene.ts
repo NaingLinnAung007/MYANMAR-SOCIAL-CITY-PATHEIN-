@@ -7,7 +7,7 @@ import { buildUmbrellaMarket } from './UmbrellaMarket';
 import { buildPatheinDowntown } from './Downtown';
 import { buildSocialPark } from './SocialPark';
 import { createStonePavingTexture } from '../textures/proceduralTextures';
-import { CameraMode, ColliderBox, InteractiveSpot, LocationInfo, TimeOfDay, WeatherType } from '../types';
+import { CameraMode, ColliderBox, InteractiveSpot, LocationInfo, SurfaceMaterialType, TimeOfDay, WeatherType } from '../types';
 import { sound } from '../audio/soundSystem';
 import { WeatherSystem } from './WeatherSystem';
 
@@ -292,11 +292,40 @@ export class GameScene {
   private updateUmbrellasFn: ((t: number) => void) | null = null;
 
   // Camera settings
+  // Camera settings with Lerp Buffers for jitter-free rotation and zoom
   public cameraMode: CameraMode = 'third_person';
-  public cameraAngleYaw: number = 0;
-  public cameraAnglePitch: number = 0.35;
-  public cameraDistance: number = 7.5;
+  public targetCameraYaw: number = 0;
+  public currentCameraYaw: number = 0;
+  public targetCameraPitch: number = 0.35;
+  public currentCameraPitch: number = 0.35;
+  public targetCameraDistance: number = 7.5;
+  public currentCameraDistance: number = 7.5;
   private cinematicTimer: number = 0;
+  private currentCameraLookTarget: THREE.Vector3 = new THREE.Vector3(0, 1.8, 18);
+
+  public get cameraAngleYaw(): number {
+    return this.currentCameraYaw;
+  }
+  public set cameraAngleYaw(val: number) {
+    this.targetCameraYaw = val;
+    this.currentCameraYaw = val;
+  }
+
+  public get cameraAnglePitch(): number {
+    return this.currentCameraPitch;
+  }
+  public set cameraAnglePitch(val: number) {
+    this.targetCameraPitch = val;
+    this.currentCameraPitch = val;
+  }
+
+  public get cameraDistance(): number {
+    return this.currentCameraDistance;
+  }
+  public set cameraDistance(val: number) {
+    this.targetCameraDistance = val;
+    this.currentCameraDistance = val;
+  }
 
   // Coaster Ride mode
   public isCoasterActive: boolean = false;
@@ -413,6 +442,7 @@ export class GameScene {
 
     // 6. Character Controller
     this.character = new CharacterController();
+    this.character.surfaceResolver = (x, z) => this.getSurfaceMaterialAt(x, z);
     this.scene.add(this.character.group);
 
     // Click-to-move destination indicator ring
@@ -809,47 +839,73 @@ export class GameScene {
       this.camera.position.set(camX, camY, camZ);
       this.camera.lookAt(0, 8, 0); // Focused on Shwemokhtaw Pagoda spire
     } else if (this.cameraMode === 'first_person') {
+      // 1. Lerp buffer for first-person orientation
+      let yawDiff = this.targetCameraYaw - this.currentCameraYaw;
+      while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+      while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+      this.currentCameraYaw += yawDiff * (1 - Math.exp(-12 * dt));
+      this.currentCameraPitch = THREE.MathUtils.damp(this.currentCameraPitch, this.targetCameraPitch, 12, dt);
+
       // Eye level of character
       const headHeight = 2.4;
       this.camera.position.set(charPos.x, charPos.y + headHeight, charPos.z);
 
       const lookTarget = new THREE.Vector3(
-        charPos.x + Math.sin(this.cameraAngleYaw) * 10,
-        charPos.y + headHeight - Math.sin(this.cameraAnglePitch) * 10,
-        charPos.z + Math.cos(this.cameraAngleYaw) * 10
+        charPos.x + Math.sin(this.currentCameraYaw) * 10,
+        charPos.y + headHeight - Math.sin(this.currentCameraPitch) * 10,
+        charPos.z + Math.cos(this.currentCameraYaw) * 10
       );
       this.camera.lookAt(lookTarget);
     } else {
-      // Third-person smooth follow camera with yaw and pitch control
+      // 1. Lerp buffer for camera rotation (Yaw & Pitch)
+      // Shortest-arc angular lerp for yaw so 360-degree rotation is continuous and seamless
+      let yawDiff = this.targetCameraYaw - this.currentCameraYaw;
+      while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+      while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+      const yawLerpFactor = 1 - Math.exp(-12 * dt);
+      this.currentCameraYaw += yawDiff * yawLerpFactor;
+
+      // Smooth lerp buffer for pitch
+      this.targetCameraPitch = THREE.MathUtils.clamp(this.targetCameraPitch, -0.25, 1.35);
+      this.currentCameraPitch = THREE.MathUtils.damp(this.currentCameraPitch, this.targetCameraPitch, 12, dt);
+
+      // 2. Lerp buffer for camera zoom distance
+      this.targetCameraDistance = THREE.MathUtils.clamp(this.targetCameraDistance, 2.0, 22.0);
+      this.currentCameraDistance = THREE.MathUtils.damp(this.currentCameraDistance, this.targetCameraDistance, 9, dt);
+
+      // 3. Smooth follow target look point
       const targetLook = new THREE.Vector3(charPos.x, charPos.y + 1.8, charPos.z);
+      this.currentCameraLookTarget.x = THREE.MathUtils.damp(this.currentCameraLookTarget.x, targetLook.x, 10, dt);
+      this.currentCameraLookTarget.y = THREE.MathUtils.damp(this.currentCameraLookTarget.y, targetLook.y, 10, dt);
+      this.currentCameraLookTarget.z = THREE.MathUtils.damp(this.currentCameraLookTarget.z, targetLook.z, 10, dt);
 
-      const offsetDist = this.cameraDistance;
-      const camX = charPos.x - Math.sin(this.cameraAngleYaw) * Math.cos(this.cameraAnglePitch) * offsetDist;
-      const camY = charPos.y + 1.8 + Math.sin(this.cameraAnglePitch) * offsetDist;
-      const camZ = charPos.z - Math.cos(this.cameraAngleYaw) * Math.cos(this.cameraAnglePitch) * offsetDist;
+      const offsetDist = this.currentCameraDistance;
+      const camX = charPos.x - Math.sin(this.currentCameraYaw) * Math.cos(this.currentCameraPitch) * offsetDist;
+      const camY = charPos.y + 1.8 + Math.sin(this.currentCameraPitch) * offsetDist;
+      const camZ = charPos.z - Math.cos(this.currentCameraYaw) * Math.cos(this.currentCameraPitch) * offsetDist;
 
-      // Exponential damping for smooth glide
-      this.camera.position.x = THREE.MathUtils.damp(this.camera.position.x, camX, 10, dt);
-      this.camera.position.y = THREE.MathUtils.damp(this.camera.position.y, Math.max(camY, 0.8), 10, dt);
-      this.camera.position.z = THREE.MathUtils.damp(this.camera.position.z, camZ, 10, dt);
+      // Exponential damping for smooth glide (zero jitter)
+      this.camera.position.x = THREE.MathUtils.damp(this.camera.position.x, camX, 9, dt);
+      this.camera.position.y = THREE.MathUtils.damp(this.camera.position.y, Math.max(camY, 0.8), 9, dt);
+      this.camera.position.z = THREE.MathUtils.damp(this.camera.position.z, camZ, 9, dt);
 
-      this.camera.lookAt(targetLook);
+      this.camera.lookAt(this.currentCameraLookTarget);
     }
   }
 
   /**
-   * Free 360-degree camera rotation
+   * Free 360-degree camera rotation into target lerp buffer
    */
   public rotateCamera(deltaYaw: number, deltaPitch: number) {
-    this.cameraAngleYaw -= deltaYaw;
-    this.cameraAnglePitch = Math.max(-0.25, Math.min(1.35, this.cameraAnglePitch + deltaPitch));
+    this.targetCameraYaw -= deltaYaw;
+    this.targetCameraPitch = THREE.MathUtils.clamp(this.targetCameraPitch + deltaPitch, -0.25, 1.35);
   }
 
   /**
-   * Smooth zoom in and out
+   * Smooth zoom in and out into target lerp buffer
    */
   public zoomCamera(deltaDist: number) {
-    this.cameraDistance = THREE.MathUtils.clamp(this.cameraDistance + deltaDist, 2.0, 22.0);
+    this.targetCameraDistance = THREE.MathUtils.clamp(this.targetCameraDistance + deltaDist, 2.0, 22.0);
   }
 
   /**
@@ -971,6 +1027,12 @@ export class GameScene {
     const loc = PATHEIN_LOCATIONS.find(l => l.id === locId);
     if (loc) {
       this.character.teleport(loc.position.x, loc.position.z + 5);
+      // Snap camera target and position immediately to prevent cross-map sweep
+      this.currentCameraLookTarget.set(loc.position.x, 1.8, loc.position.z + 5);
+      const camX = loc.position.x - Math.sin(this.currentCameraYaw) * Math.cos(this.currentCameraPitch) * this.currentCameraDistance;
+      const camY = 1.8 + Math.sin(this.currentCameraPitch) * this.currentCameraDistance;
+      const camZ = (loc.position.z + 5) - Math.cos(this.currentCameraYaw) * Math.cos(this.currentCameraPitch) * this.currentCameraDistance;
+      this.camera.position.set(camX, Math.max(camY, 0.8), camZ);
       sound.playInteraction();
     }
   }

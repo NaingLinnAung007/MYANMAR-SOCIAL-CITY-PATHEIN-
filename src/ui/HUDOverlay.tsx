@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import {
-  Sun, Sunset, Moon, Volume2, VolumeX, Eye, Camera,
-  BookOpen, MessageSquare, ChevronDown, ChevronUp,
+  Sun, Sunset, Moon, Volume2, VolumeX, Eye, EyeOff, Camera,
+  BookOpen, MessageSquare, ChevronDown, ChevronUp, Menu, X,
   MapPin, Sparkles, User, Coffee, Navigation, CloudRain,
-  Award, Coins, Users, Flame, Mic, MicOff, Plus, Minus,
-  Heart, Smile, ThumbsUp, Waves
+  Award, Coins, Users, Flame, Mic, MicOff, Maximize, Minimize,
+  Leaf, Utensils, Heart, Smile, ThumbsUp, Waves, Settings
 } from 'lucide-react';
 import { CameraMode, CharacterAction, DailyTask, Friend, InteractiveSpot, LocationInfo, PlayerStats, TimeOfDay, WeatherType } from '../types';
 import { Minimap } from './Minimap';
@@ -17,6 +17,7 @@ interface HUDOverlayProps {
   onTimeOfDayChange: (time: TimeOfDay) => void;
   weather: WeatherType;
   onToggleWeather: () => void;
+  onSelectWeather?: (weather: WeatherType) => void;
   cameraMode: CameraMode;
   onCameraModeChange: (mode: CameraMode) => void;
   isMuted: boolean;
@@ -28,6 +29,7 @@ interface HUDOverlayProps {
   onOpenMap: () => void;
   onEnterPhotoMode: () => void;
   onOpenAccount: () => void;
+  onOpenTeaMenu?: () => void;
   playerName: string;
   isVoiceActive: boolean;
   onToggleVoice: () => void;
@@ -52,6 +54,7 @@ export const HUDOverlay: React.FC<HUDOverlayProps> = ({
   onTimeOfDayChange,
   weather,
   onToggleWeather,
+  onSelectWeather,
   cameraMode,
   onCameraModeChange,
   isMuted,
@@ -63,6 +66,7 @@ export const HUDOverlay: React.FC<HUDOverlayProps> = ({
   onOpenMap,
   onEnterPhotoMode,
   onOpenAccount,
+  onOpenTeaMenu,
   playerName,
   isVoiceActive,
   onToggleVoice,
@@ -76,190 +80,158 @@ export const HUDOverlay: React.FC<HUDOverlayProps> = ({
   unreadChatCount,
   isHoldingUmbrella,
   onToggleUmbrella,
-  onCameraZoom,
 }) => {
-  const [isDockCollapsed, setIsDockCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState<'emotes' | 'environment' | 'social'>('emotes');
+  // Clean View / Zen Mode - hides all UI clutter for supreme visual comfort
+  const [isCleanMode, setIsCleanMode] = useState<boolean>(false);
+  // All-in-One Menu Drawer
+  const [isMenuDrawerOpen, setIsMenuDrawerOpen] = useState<boolean>(false);
+  // Bottom Emote Bar (Closed by default to keep screen clean)
+  const [isEmoteBarOpen, setIsEmoteBarOpen] = useState<boolean>(false);
+  // Fullscreen state
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => {
+        setIsFullscreen(true);
+        try {
+          (screen.orientation as any)?.lock('landscape').catch(() => {});
+        } catch (_) {}
+      }).catch(() => {});
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+      }
+    }
+  };
 
   const claimableTaskCount = dailyTasks.filter(t => t.isCompleted && !t.isClaimed).length;
   const onlineFriendCount = friends.filter(f => f.status === 'online').length;
 
+  // Emotes list
+  const EMOTES_LIST: { id: CharacterAction; name: string; burmese: string; icon: string; key: string }[] = [
+    { id: 'bow', name: 'Bow', burmese: 'ဦးချ', icon: '🙏', key: '1' },
+    { id: 'pray', name: 'Pray', burmese: 'ရှိခိုး', icon: '✨', key: '2' },
+    { id: 'tea_cheers', name: 'Tea Cheers', burmese: 'လက်ဖက်ရည်', icon: '☕', key: '4' },
+    { id: 'umbrella_dance', name: 'Umbrella Dance', burmese: 'ထီးအက', icon: '☂️', key: '3' },
+    { id: 'wave', name: 'Wave', burmese: 'နှုတ်ဆက်', icon: '👋', key: '5' },
+    { id: 'clap', name: 'Clap', burmese: 'လက်ခုပ်', icon: '👏', key: '6' },
+    { id: 'laugh', name: 'Smile', burmese: 'ပြုံးရွှင်', icon: '😀', key: '7' },
+    { id: 'water_gun', name: 'Water Gun', burmese: 'ရေပြောင်း', icon: '🔫', key: '8' },
+  ];
+
   return (
     <div className="absolute inset-0 pointer-events-none select-none overflow-hidden z-20 flex flex-col justify-between">
-      {/* 1. Top Navigation & Status Bar */}
-      <div className="p-3.5 sm:p-5 flex items-start justify-between gap-3">
-        {/* Left: Game Title Badge, District Pill, and Prominent City Map & Destination Button */}
-        <div className="flex flex-col gap-1.5 pointer-events-auto">
-          {/* Main Title Badge */}
-          <div className="px-3.5 py-1.5 rounded-xl bg-slate-950/80 border border-amber-500/40 shadow-lg flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-            <div>
-              <h1 className="text-xs sm:text-sm font-bold text-amber-200 tracking-wide font-sans">
-                MYANMAR SOCIAL CITY – PATHEIN
-              </h1>
-              <p className="text-[10px] text-amber-300 font-medium">
-                မြန်မာလူမှုမြို့တော် – ပုသိမ်မြို့
-              </p>
-            </div>
+      {/* =========================================================================
+          1. ZEN / CLEAN MODE CHIP (When Clean Mode is active, only this shows)
+         ========================================================================= */}
+      {isCleanMode ? (
+        <div className="p-3 landscape:p-2 flex items-center justify-between w-full pointer-events-auto">
+          <div className="px-3.5 py-1.5 rounded-full bg-slate-950/75 border border-amber-500/35 text-amber-200 text-xs shadow-xl backdrop-blur-md flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <MapPin className="w-3.5 h-3.5 text-amber-400" />
+            <span className="font-bold">{currentDistrict?.burmeseName || 'ပုသိမ်မြို့'}</span>
+            <span className="text-slate-500">|</span>
+            <span className="text-[10px] text-amber-300/80">ရှုခင်းကြည့်မုဒ် (Zen View)</span>
           </div>
 
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {/* Current District Discovery Badge */}
-            {currentDistrict && (
-              <div className="px-3 py-1 rounded-lg bg-amber-950/80 border border-amber-500/30 shadow flex items-center gap-2 max-w-xs transition-all">
-                <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <div className="truncate">
-                  <span className="text-xs font-semibold text-amber-100 block truncate">
-                    {currentDistrict.burmeseName}
-                  </span>
-                  <span className="text-[9px] text-amber-300/80 block truncate">
-                    {currentDistrict.englishName}
-                  </span>
-                </div>
+          <button
+            onClick={() => setIsCleanMode(false)}
+            className="px-3 py-1.5 rounded-full bg-amber-500 hover:bg-yellow-400 text-slate-950 font-bold text-xs shadow-xl border border-yellow-200 flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+            title="Show Controls (ခလုတ်များ ပြန်ဖွင့်မည်)"
+          >
+            <Eye className="w-3.5 h-3.5" />
+            <span>UI ဖော်မည်</span>
+          </button>
+        </div>
+      ) : (
+        /* =========================================================================
+            2. MODERN COMPACT TOP NAVIGATION (Sleek Glass Islands - Uncluttered)
+           ========================================================================= */
+        <div className="p-2 sm:p-4 landscape:p-2 flex items-start justify-between gap-2 pointer-events-auto">
+          {/* Top-Left Island: Location & Map Shortcut */}
+          <div className="flex items-center gap-1.5 bg-slate-950/80 border border-amber-500/35 rounded-2xl p-1 sm:p-1.5 shadow-xl backdrop-blur-md">
+            {/* District Badge */}
+            <div className="px-2.5 py-1 rounded-xl bg-amber-950/60 border border-amber-500/25 flex items-center gap-1.5 max-w-[130px] sm:max-w-[180px]">
+              <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <div className="truncate">
+                <span className="text-xs font-bold text-amber-200 block truncate">
+                  {currentDistrict?.burmeseName || 'ပုသိမ်မြို့'}
+                </span>
+                <span className="text-[9px] text-amber-400/70 hidden sm:block truncate">
+                  {currentDistrict?.englishName || 'Pathein City'}
+                </span>
               </div>
-            )}
+            </div>
 
-            {/* Prominent City Map & Destination Picker Button */}
+            {/* Interactive City Map Button */}
             <button
               onClick={onOpenMap}
-              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-bold text-xs shadow-xl border border-yellow-200 flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer"
-              title="Open Pathein Interactive Map & Quests"
+              className="px-2.5 sm:px-3 py-1 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-bold text-xs shadow border border-yellow-200 flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
+              title="Open Pathein Map & Tasks"
             >
               <Navigation className="w-3.5 h-3.5 fill-slate-950" />
-              <span>မြေပုံ & သွားမည့်နေရာ (City Map)</span>
+              <span>မြေပုံ</span>
+            </button>
+
+            {/* Quick Weather Indicator / Cycle */}
+            <button
+              onClick={onToggleWeather}
+              className="px-2 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700/60 text-amber-300 text-xs font-medium flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
+              title="Change Weather (ရာသီဥတု ပြောင်းမည်)"
+            >
+              {weather === 'tropical_rain' && <CloudRain className="w-3.5 h-3.5 text-cyan-400" />}
+              {weather === 'sunset_flares' && <Sunset className="w-3.5 h-3.5 text-orange-400" />}
+              {weather === 'falling_leaves' && <Leaf className="w-3.5 h-3.5 text-emerald-400" />}
+              {weather === 'clear' && <Sun className="w-3.5 h-3.5 text-amber-400" />}
+              <span className="text-[11px] hidden sm:inline">
+                {weather === 'tropical_rain' ? 'မိုးဖွဲ' : weather === 'sunset_flares' ? 'ဆည်းဆာ' : weather === 'falling_leaves' ? 'သစ်ရွက်' : 'နေသာ'}
+              </span>
             </button>
           </div>
 
-          {/* Rain Alert Banner when weather is tropical_rain */}
-          {weather === 'tropical_rain' && (
-            <div className="px-3 py-1 rounded-lg bg-cyan-950/85 border border-cyan-400/40 text-cyan-200 shadow flex items-center gap-2 max-w-xs">
-              <CloudRain className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
-              <span className="text-[10px] font-medium truncate">
-                ပုသိမ်မြစ်ကမ်းနား မိုးဖွဲဖွဲရွာသွန်းနေသည် (Light Tropical Rain)
-              </span>
-              {!isHoldingUmbrella && (
-                <button
-                  onClick={onToggleUmbrella}
-                  className="px-1.5 py-0.5 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[9px] whitespace-nowrap ml-auto"
-                >
-                  ထီးဆောင်း
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Right: Quick Action Controls & Minimap */}
-        <div className="flex flex-col items-end gap-2 pointer-events-auto">
-          {/* Row 1: Player Stats & Quick Game Action Pills */}
-          <div className="flex items-center gap-1.5 flex-wrap justify-end">
-            {/* Account & Avatar Customizer Button */}
-            <button
-              onClick={onOpenAccount}
-              className="px-2.5 sm:px-3 py-1 rounded-xl bg-gradient-to-r from-amber-500/25 to-yellow-500/20 hover:from-amber-500/40 hover:to-yellow-500/30 border border-amber-400/70 text-amber-200 shadow text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer"
-              title="Account & Character Customizer (အကောင့် & ဇာတ်ကောင် စိတ်ကြိုက်ပြင်ဆင်ရန်)"
-            >
-              <User className="w-3.5 h-3.5 text-amber-300" />
-              <span className="max-w-[80px] sm:max-w-none truncate">{playerName || 'ပုသိမ်သား'}</span>
-            </button>
-
-            {/* Player Stats Pill */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950/85 border border-amber-500/40 shadow text-[11px]">
-              <div className="flex items-center gap-1 text-amber-300 font-bold" title="Player Level">
-                <Flame className="w-3.5 h-3.5 text-amber-400" />
-                <span>Lv.{playerStats.level}</span>
-              </div>
-              <span className="text-slate-600">|</span>
-              <div className="flex items-center gap-1 text-yellow-300 font-bold" title="Pathein Kyats">
+          {/* Top-Right Island: Player Stats & Essential Action Icons */}
+          <div className="flex items-center gap-1.5 bg-slate-950/80 border border-amber-500/35 rounded-2xl p-1 sm:p-1.5 shadow-xl backdrop-blur-md">
+            {/* Player Stats (Coin & Level) */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900/80 border border-amber-500/20 text-xs">
+              <div className="flex items-center gap-1 text-yellow-300 font-bold">
                 <Coins className="w-3.5 h-3.5 text-yellow-400" />
                 <span>{playerStats.kyats}</span>
               </div>
               <span className="text-slate-600">|</span>
-              <div className="flex items-center gap-1 text-cyan-300 font-bold" title="Merit Points">
-                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                <span>{playerStats.meritPoints}</span>
+              <div className="flex items-center gap-1 text-amber-300 font-bold">
+                <Flame className="w-3.5 h-3.5 text-amber-400" />
+                <span>Lv.{playerStats.level}</span>
               </div>
             </div>
 
             {/* Daily Tasks Button */}
             <button
               onClick={onOpenTasks}
-              className={`relative px-2.5 sm:px-3 py-1 rounded-xl border shadow text-xs font-semibold flex items-center gap-1.5 active:scale-95 transition-all ${
+              className={`relative px-2 sm:px-2.5 py-1 rounded-xl border shadow text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all cursor-pointer ${
                 claimableTaskCount > 0
-                  ? 'bg-amber-600/90 border-yellow-300 text-yellow-100'
-                  : 'bg-slate-900/85 border-amber-500/30 text-amber-300 hover:bg-slate-800'
+                  ? 'bg-amber-600 text-yellow-100 border-yellow-300 animate-pulse'
+                  : 'bg-slate-900/80 hover:bg-slate-800 border-slate-700 text-amber-300'
               }`}
               title="Daily Quests (နေ့စဉ်တာဝန်များ)"
             >
               <Award className="w-3.5 h-3.5 text-yellow-400" />
-              <span className="hidden sm:inline">တာဝန် (Quests)</span>
-              {claimableTaskCount > 0 ? (
+              <span className="hidden sm:inline">တာဝန်</span>
+              {claimableTaskCount > 0 && (
                 <span className="px-1.5 py-0.2 rounded-full bg-emerald-400 text-slate-950 text-[9px] font-bold">
                   +{claimableTaskCount}
                 </span>
-              ) : (
-                <span className="text-[10px] text-amber-300 font-bold">
-                  {dailyTasks.filter(t => t.isCompleted).length}/{dailyTasks.length}
-                </span>
               )}
-            </button>
-
-            {/* Friends Button */}
-            <button
-              onClick={onOpenFriends}
-              className="relative px-2.5 sm:px-3 py-1 rounded-xl bg-slate-900/85 hover:bg-slate-800 border border-amber-500/30 text-amber-300 shadow text-xs font-semibold flex items-center gap-1.5 active:scale-95 transition-all"
-              title="Friends (ပုသိမ် သူငယ်ချင်းများ)"
-            >
-              <Users className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">မိတ်ဆွေ (Friends)</span>
-              {onlineFriendCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 text-[9px] font-bold border border-emerald-500/40">
-                  {onlineFriendCount}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* Row 2: Secondary buttons: Voice Mic, Weather, Chat, Guide, Mute */}
-          <div className="flex items-center gap-1.5">
-            {/* Simulated Voice Chat Mic button */}
-            <button
-              onClick={onToggleVoice}
-              className={`px-2.5 py-1 rounded-xl border shadow text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all cursor-pointer ${
-                isVoiceActive
-                  ? 'bg-emerald-600/90 border-emerald-300 text-white animate-pulse'
-                  : 'bg-slate-900/85 border-amber-500/30 text-slate-300 hover:text-amber-200'
-              }`}
-              title="Voice Chat Mic (အသံဖြင့် စကားပြော မိုက်ဖွင့်/ပိတ် M key)"
-            >
-              {isVoiceActive ? <Mic className="w-3.5 h-3.5 text-emerald-200" /> : <MicOff className="w-3.5 h-3.5 text-slate-400" />}
-              <span className="hidden sm:inline text-[11px]">{isVoiceActive ? 'မိုက်ဖွင့်' : 'မိုက်ပိတ်'}</span>
-            </button>
-
-            {/* Weather System Toggle Button */}
-            <button
-              onClick={onToggleWeather}
-              className={`px-2.5 py-1 rounded-xl border shadow text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all ${
-                weather === 'tropical_rain'
-                  ? 'bg-cyan-950/90 border-cyan-400 text-cyan-200'
-                  : 'bg-slate-900/85 border-amber-500/30 text-amber-300'
-              }`}
-              title="Toggle Light Tropical Rain (မိုးဖွဲဖွဲ)"
-            >
-              <CloudRain className={`w-3.5 h-3.5 ${weather === 'tropical_rain' ? 'text-cyan-300' : 'text-slate-400'}`} />
-              <span className="hidden sm:inline text-[11px]">
-                {weather === 'tropical_rain' ? 'မိုးဖွဲ' : 'နေသာ'}
-              </span>
             </button>
 
             {/* Social Chat Button */}
             <button
               onClick={onOpenChat}
-              className="relative px-2.5 py-1 rounded-xl bg-slate-900/85 hover:bg-slate-800 border border-amber-500/30 text-amber-300 shadow text-xs font-medium flex items-center gap-1 active:scale-95 transition-all"
-              title="Social Chat"
+              className="relative p-1.5 sm:px-2.5 sm:py-1 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700 text-amber-300 shadow text-xs font-medium flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
+              title="Live Chat (စကားဝိုင်း)"
             >
               <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline text-[11px]">စကားဝိုင်း</span>
+              <span className="hidden sm:inline">စကား</span>
               {unreadChatCount > 0 && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center">
                   {unreadChatCount}
@@ -270,356 +242,362 @@ export const HUDOverlay: React.FC<HUDOverlayProps> = ({
             {/* Photo Mode Button */}
             <button
               onClick={onEnterPhotoMode}
-              className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-slate-950 font-bold shadow-md text-xs flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer"
-              title="Pathein Photo Studio (ဓာတ်ပုံရိုက်မည်)"
+              className="p-1.5 sm:px-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700 text-amber-300 shadow active:scale-95 transition-all cursor-pointer"
+              title="Photo Studio (ဓာတ်ပုံ)"
             >
-              <Camera className="w-3.5 h-3.5 fill-slate-950" />
-              <span className="text-[11px]">ဓာတ်ပုံ (Photo)</span>
+              <Camera className="w-3.5 h-3.5 text-amber-300" />
             </button>
 
-            {/* Pathein Heritage Guide Button */}
+            {/* Clean View / Zen Mode Toggle */}
             <button
-              onClick={onOpenInfo}
-              className="p-1.5 sm:px-2.5 sm:py-1 rounded-xl bg-slate-900/85 hover:bg-slate-800 border border-amber-500/30 text-amber-300 shadow text-xs font-medium flex items-center gap-1 active:scale-95 transition-all"
-              title="Pathein Cultural Guide"
+              onClick={() => setIsCleanMode(true)}
+              className="p-1.5 sm:px-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700 text-cyan-300 shadow active:scale-95 transition-all cursor-pointer"
+              title="Clean Mode (မျက်နှာပြင်ရှင်းလင်းစွာ ကြည့်ရှုမည်)"
             >
-              <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden md:inline text-[11px]">လမ်းညွှန်</span>
+              <EyeOff className="w-3.5 h-3.5 text-cyan-300" />
             </button>
 
-            {/* Audio Mute Switch */}
+            {/* All-In-One Menu Button (Opens sleek drawer) */}
             <button
-              onClick={onToggleMute}
-              className={`p-1.5 rounded-xl border shadow active:scale-95 transition-all ${
-                isMuted
-                  ? 'bg-rose-950/80 border-rose-500/40 text-rose-300'
-                  : 'bg-slate-900/85 border-amber-500/30 text-amber-300'
-              }`}
-              title={isMuted ? 'Unmute Audio' : 'Mute Audio'}
+              onClick={() => setIsMenuDrawerOpen(true)}
+              className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-slate-950 font-bold text-xs shadow-md flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
+              title="Open Menu (မီနူး)"
             >
-              {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+              <Menu className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">မီနူး</span>
             </button>
-          </div>
-
-          {/* Radar Minimap */}
-          <div className="hidden sm:block">
-            <Minimap
-              playerPos={playerPos}
-              playerYaw={playerYaw}
-              onTeleport={onTeleportDistrict}
-              onOpenFullMap={onOpenMap}
-              tasks={dailyTasks}
-            />
           </div>
         </div>
-      </div>
+      )}
 
-      {/* 2. Proximity Interactive Banner (Center Screen Alert) */}
-      {nearInteractive && (
-        <div className="self-center mb-4 px-5 py-2.5 rounded-2xl bg-slate-950/90 border-2 border-yellow-400 text-center shadow-2xl pointer-events-auto transform animate-bounce duration-1000 max-w-sm sm:max-w-md">
-          <div className="flex items-center justify-center gap-2 mb-0.5">
+      {/* =========================================================================
+          3. PROXIMITY INTERACTIVE PROMPT (Only shown when standing near spot)
+         ========================================================================= */}
+      {nearInteractive && !isCleanMode && (
+        <div className="self-center mb-6 px-4 py-2 rounded-2xl bg-slate-950/90 border-2 border-yellow-400 text-center shadow-2xl pointer-events-auto transform animate-bounce duration-1000 max-w-xs sm:max-w-sm backdrop-blur-md">
+          <div className="flex items-center justify-center gap-1.5 mb-0.5">
             <Sparkles className="w-4 h-4 text-yellow-400" />
             <h3 className="text-xs sm:text-sm font-bold text-yellow-300">
               {nearInteractive.burmeseTitle}
             </h3>
           </div>
-          <p className="text-[11px] text-slate-300 mb-2">{nearInteractive.description}</p>
           <button
             onClick={onTriggerInteractive}
-            className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-bold text-xs shadow-md active:scale-95 transition-transform"
+            className="mt-1 px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-black text-xs shadow-md active:scale-95 transition-transform cursor-pointer"
           >
-            {nearInteractive.burmeseActionText} ({nearInteractive.actionText})
+            {nearInteractive.burmeseActionText}
           </button>
         </div>
       )}
 
-      {/* 3. Consolidated Collapsible Bottom Dock (Zero Viewport Occlusion) */}
-      <div className="pointer-events-auto self-center mb-3 flex flex-col items-center">
-        {/* Dock Collapse Toggle Tab */}
-        <button
-          onClick={() => setIsDockCollapsed(!isDockCollapsed)}
-          className="px-4 py-1 rounded-t-xl bg-slate-950/90 hover:bg-slate-900 border-t border-x border-amber-500/40 text-amber-300 text-[11px] font-medium flex items-center gap-1 shadow-lg transition-colors cursor-pointer"
-        >
-          {isDockCollapsed ? (
-            <>
-              <ChevronUp className="w-3.5 h-3.5" />
-              <span>Show Controls (ထိန်းချုပ်ခလုတ်များ ဖွင့်မည်)</span>
-            </>
-          ) : (
-            <>
-              <ChevronDown className="w-3.5 h-3.5" />
-              <span>Cinema Mode (ဝှက်မည်)</span>
-            </>
+      {/* =========================================================================
+          4. BOTTOM CENTER EMOTE BAR (Compact & Discreet)
+         ========================================================================= */}
+      {!isCleanMode && (
+        <div className="pointer-events-auto self-center mb-2 flex flex-col items-center select-none">
+          {/* Pop-up Emotes Tray */}
+          {isEmoteBarOpen && (
+            <div className="mb-1.5 p-1.5 rounded-2xl bg-slate-950/95 border border-amber-500/40 shadow-2xl backdrop-blur-md flex items-center gap-1.5 overflow-x-auto max-w-[94vw] sm:max-w-lg">
+              {EMOTES_LIST.map(emote => (
+                <button
+                  key={emote.id}
+                  onClick={() => {
+                    onTriggerEmote(emote.id);
+                  }}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-amber-600 text-amber-200 text-[11px] font-bold border border-slate-700/60 active:scale-95 transition-all flex items-center gap-1 whitespace-nowrap cursor-pointer"
+                  title={`Press [${emote.key}] key`}
+                >
+                  <span className="text-sm">{emote.icon}</span>
+                  <span>{emote.burmese}</span>
+                </button>
+              ))}
+            </div>
           )}
-        </button>
 
-        {/* Main Dock Container */}
-        <div
-          className={`transition-all duration-300 ease-out origin-bottom ${
-            isDockCollapsed
-              ? 'opacity-0 translate-y-12 pointer-events-none h-0 overflow-hidden'
-              : 'opacity-100 translate-y-0 max-w-[94vw] w-auto'
-          }`}
-        >
-          <div className="p-2 sm:p-2.5 rounded-2xl bg-slate-950/90 border border-amber-500/40 shadow-2xl flex flex-col gap-2">
-            {/* Dock Tabs - Landmark selection moved away to top map modal */}
-            <div className="flex items-center justify-center gap-1 border-b border-slate-800 pb-1.5 text-xs">
+          {/* Discreet Emote Toggle Chip */}
+          <button
+            onClick={() => setIsEmoteBarOpen(!isEmoteBarOpen)}
+            className="px-3 py-1 rounded-full bg-slate-950/80 hover:bg-slate-900 border border-amber-500/30 text-amber-300 text-[11px] font-bold shadow-lg flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer backdrop-blur-md"
+          >
+            <Smile className="w-3.5 h-3.5 text-amber-400" />
+            <span>အမူအရာ (Emotes)</span>
+            {isEmoteBarOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+          </button>
+        </div>
+      )}
+
+      {/* =========================================================================
+          5. ALL-IN-ONE CLEAN MENU DRAWER (Consolidates all menus cleanly)
+         ========================================================================= */}
+      {isMenuDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md pointer-events-auto">
+          <div className="relative w-full max-w-lg max-h-[90vh] bg-slate-900 border-2 border-amber-500/50 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100">
+            {/* Header */}
+            <div className="px-5 py-3 border-b border-amber-500/30 bg-gradient-to-r from-amber-950/80 via-slate-900 to-amber-950/80 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Settings className="w-5 h-5 text-amber-400" />
+                <h2 className="text-base font-bold text-amber-200">
+                  ဂိမ်းထိန်းချုပ်မှု & မီနူး (Game Menu & Settings)
+                </h2>
+              </div>
               <button
-                onClick={() => setActiveTab('social')}
-                className={`px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1 ${
-                  activeTab === 'social'
-                    ? 'bg-amber-600 text-amber-50 shadow'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
+                onClick={() => setIsMenuDrawerOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer"
               >
-                <span>မိတ်ဆွေ & တာဝန် (Social & Quests)</span>
-                {claimableTaskCount > 0 && (
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab('emotes')}
-                className={`px-3 py-1 rounded-lg font-medium transition-all ${
-                  activeTab === 'emotes'
-                    ? 'bg-amber-600 text-amber-50 shadow'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                အမူအရာ (Emotes)
-              </button>
-              <button
-                onClick={() => setActiveTab('environment')}
-                className={`px-3 py-1 rounded-lg font-medium transition-all ${
-                  activeTab === 'environment'
-                    ? 'bg-amber-600 text-amber-50 shadow'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                အချိန်နှင့် ရှုထောင့် (View)
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Tab 2: Myanmar Traditional Emotes (Keys 1-8) */}
-            {activeTab === 'emotes' && (
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full">
-                <button
-                  onClick={() => onTriggerEmote('bow')}
-                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
-                  title="Press [1] key"
-                >
-                  <span className="w-4 h-4 rounded-full bg-slate-700 text-amber-300 text-[9px] font-bold flex items-center justify-center">1</span>
-                  <span>မင်္ဂလာပါ (Bow)</span>
-                </button>
-                <button
-                  onClick={() => onTriggerEmote('pray')}
-                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
-                  title="Press [2] key"
-                >
-                  <span className="w-4 h-4 rounded-full bg-slate-700 text-amber-300 text-[9px] font-bold flex items-center justify-center">2</span>
-                  <span>ရှိခိုးမည် (Pray)</span>
-                </button>
-                <button
-                  onClick={() => onTriggerEmote('umbrella_dance')}
-                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
-                  title="Press [3] key"
-                >
-                  <span className="w-4 h-4 rounded-full bg-slate-700 text-amber-300 text-[9px] font-bold flex items-center justify-center">3</span>
-                  <span>ထီးအက (Umbrella)</span>
-                </button>
-                <button
-                  onClick={() => onTriggerEmote('tea_cheers')}
-                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
-                  title="Press [4] key"
-                >
-                  <span className="w-4 h-4 rounded-full bg-slate-700 text-amber-300 text-[9px] font-bold flex items-center justify-center">4</span>
-                  <Coffee className="w-3 h-3 text-amber-300" />
-                  <span>ချီးယားစ် (Cheers)</span>
-                </button>
-                <button
-                  onClick={() => onTriggerEmote('wave')}
-                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
-                  title="Press [5] key"
-                >
-                  <span className="w-4 h-4 rounded-full bg-slate-700 text-amber-300 text-[9px] font-bold flex items-center justify-center">5</span>
-                  <span>လက်ပြ (Wave)</span>
-                </button>
-                <button
-                  onClick={() => onTriggerEmote('clap')}
-                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
-                  title="Press [6] key"
-                >
-                  <span className="w-4 h-4 rounded-full bg-slate-700 text-amber-300 text-[9px] font-bold flex items-center justify-center">6</span>
-                  <span>လက်ခုပ် (Clap)</span>
-                </button>
-                <button
-                  onClick={() => onTriggerEmote('laugh')}
-                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
-                  title="Press [7] key"
-                >
-                  <span className="w-4 h-4 rounded-full bg-slate-700 text-amber-300 text-[9px] font-bold flex items-center justify-center">7</span>
-                  <span>ရယ်မော (Laugh)</span>
-                </button>
-                <button
-                  onClick={() => onTriggerEmote('water_gun')}
-                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
-                  title="Press [8] key"
-                >
-                  <span className="w-4 h-4 rounded-full bg-slate-700 text-amber-300 text-[9px] font-bold flex items-center justify-center">8</span>
-                  <Waves className="w-3 h-3 text-cyan-400" />
-                  <span>ရေပက် (Water Gun)</span>
-                </button>
-                <button
-                  onClick={() => onTriggerEmote('sit')}
-                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-600 text-amber-200 text-[11px] font-semibold whitespace-nowrap border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
-                  title="Press [E] key"
-                >
-                  <span className="w-4 h-4 rounded-full bg-slate-700 text-amber-300 text-[9px] font-bold flex items-center justify-center">E</span>
-                  <span>ထိုင်/ထ (Sit/Stand)</span>
-                </button>
-              </div>
-            )}
-
-            {/* Tab 3: Time of Day, Weather & Camera View Mode */}
-            {activeTab === 'environment' && (
-              <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
-                {/* Weather System Toggle */}
-                <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+            {/* Body */}
+            <div className="p-4 overflow-y-auto space-y-4 text-xs">
+              {/* Section 1: Features & Navigation */}
+              <div>
+                <h3 className="text-[11px] font-bold text-amber-400 uppercase tracking-wider mb-2">
+                  အဓိက လုပ်ဆောင်ချက်များ (Main Features)
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
                   <button
-                    onClick={() => weather !== 'clear' && onToggleWeather()}
-                    className={`px-2.5 py-1 rounded-lg flex items-center gap-1 text-[11px] transition-all ${
-                      weather === 'clear'
-                        ? 'bg-amber-500 text-slate-950 font-bold'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
+                    onClick={() => {
+                      setIsMenuDrawerOpen(false);
+                      onOpenAccount();
+                    }}
+                    className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 flex items-center gap-2.5 text-left cursor-pointer"
                   >
-                    <Sun className="w-3.5 h-3.5" />
-                    <span>နေသာ (Clear)</span>
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-amber-200 block truncate">{playerName || 'ပုသိမ်သား'}</span>
+                      <span className="text-[10px] text-slate-400">ဇာတ်ကောင် စိတ်ကြိုက်ပြင်</span>
+                    </div>
                   </button>
+
+                  {onOpenTeaMenu && (
+                    <button
+                      onClick={() => {
+                        setIsMenuDrawerOpen(false);
+                        onOpenTeaMenu();
+                      }}
+                      className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 flex items-center gap-2.5 text-left cursor-pointer"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-yellow-400 flex items-center justify-center">
+                        <Utensils className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="font-bold text-yellow-200 block">လက်ဖက်ရည်ဆိုင်</span>
+                        <span className="text-[10px] text-slate-400">မီနူး & အစားအသောက်</span>
+                      </div>
+                    </button>
+                  )}
+
                   <button
-                    onClick={() => weather !== 'tropical_rain' && onToggleWeather()}
-                    className={`px-2.5 py-1 rounded-lg flex items-center gap-1 text-[11px] transition-all ${
-                      weather === 'tropical_rain'
-                        ? 'bg-cyan-600 text-cyan-50 font-bold'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
+                    onClick={() => {
+                      setIsMenuDrawerOpen(false);
+                      onOpenFriends();
+                    }}
+                    className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 flex items-center gap-2.5 text-left cursor-pointer"
                   >
-                    <CloudRain className="w-3.5 h-3.5" />
-                    <span>မိုးဖွဲ (Tropical Rain)</span>
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                      <Users className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-emerald-200 block">မိတ်ဆွေများ ({onlineFriendCount})</span>
+                      <span className="text-[10px] text-slate-400">သူငယ်ချင်းစာရင်း</span>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setIsMenuDrawerOpen(false);
+                      onOpenInfo();
+                    }}
+                    className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 flex items-center gap-2.5 text-left cursor-pointer"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center">
+                      <BookOpen className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-purple-200 block">ပုသိမ်လမ်းညွှန်</span>
+                      <span className="text-[10px] text-slate-400">ယဉ်ကျေးမှု အမွေအနှစ်</span>
+                    </div>
                   </button>
                 </div>
+              </div>
 
-                {/* Time of Day with Smooth Transition */}
-                <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800" title="Smooth Lighting Environment Transition">
+              {/* Section 2: Environment & Time */}
+              <div>
+                <h3 className="text-[11px] font-bold text-amber-400 uppercase tracking-wider mb-2">
+                  အချိန်နှင့် နေရောင်ခြည် (Time of Day)
+                </h3>
+                <div className="grid grid-cols-3 gap-1.5">
                   <button
                     onClick={() => onTimeOfDayChange('day')}
-                    className={`px-2 py-1 rounded-lg flex items-center gap-1 text-[11px] transition-all cursor-pointer ${
+                    className={`p-2 rounded-xl border flex items-center justify-center gap-1.5 cursor-pointer font-bold ${
                       timeOfDay === 'day'
-                        ? 'bg-amber-500 text-slate-950 font-bold shadow-md ring-1 ring-amber-300'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-amber-500 text-slate-950 border-yellow-300'
+                        : 'bg-slate-800/70 border-slate-700 text-slate-300'
                     }`}
-                    title="Switch to Tropical Daylight (နေ့ခင်း)"
                   >
-                    <Sun className="w-3.5 h-3.5" />
-                    <span>နေ့ (Day)</span>
+                    <Sun className="w-4 h-4" />
+                    <span>နေ့ခင်း (Day)</span>
                   </button>
                   <button
                     onClick={() => onTimeOfDayChange('sunset')}
-                    className={`px-2 py-1 rounded-lg flex items-center gap-1 text-[11px] transition-all cursor-pointer ${
+                    className={`p-2 rounded-xl border flex items-center justify-center gap-1.5 cursor-pointer font-bold ${
                       timeOfDay === 'sunset'
-                        ? 'bg-orange-500 text-slate-950 font-bold shadow-md ring-1 ring-orange-300'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-orange-500 text-slate-950 border-yellow-300'
+                        : 'bg-slate-800/70 border-slate-700 text-slate-300'
                     }`}
-                    title="Switch to Pathein River Sunset (ဆည်းဆာ)"
                   >
-                    <Sunset className="w-3.5 h-3.5" />
+                    <Sunset className="w-4 h-4" />
                     <span>ဆည်းဆာ (Sunset)</span>
                   </button>
                   <button
                     onClick={() => onTimeOfDayChange('night')}
-                    className={`px-2 py-1 rounded-lg flex items-center gap-1 text-[11px] transition-all cursor-pointer ${
+                    className={`p-2 rounded-xl border flex items-center justify-center gap-1.5 cursor-pointer font-bold ${
                       timeOfDay === 'night'
-                        ? 'bg-indigo-600 text-white font-bold shadow-md ring-1 ring-indigo-400'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-indigo-600 text-white border-indigo-400'
+                        : 'bg-slate-800/70 border-slate-700 text-slate-300'
                     }`}
-                    title="Switch to Night Lanterns & Shwemokhtaw Glow (ညချမ်း)"
                   >
-                    <Moon className="w-3.5 h-3.5" />
+                    <Moon className="w-4 h-4" />
                     <span>ညချမ်း (Night)</span>
                   </button>
                 </div>
+              </div>
 
-                {/* Camera Mode */}
-                <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+              {/* Section 3: Weather */}
+              {onSelectWeather && (
+                <div>
+                  <h3 className="text-[11px] font-bold text-amber-400 uppercase tracking-wider mb-2">
+                    ရာသီဥတု အထူးပြုလုပ်ချက် (Weather Overlays)
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    <button
+                      onClick={() => onSelectWeather('clear')}
+                      className={`p-2 rounded-xl border flex items-center justify-center gap-1.5 cursor-pointer font-bold ${
+                        weather === 'clear'
+                          ? 'bg-amber-500 text-slate-950 border-yellow-300'
+                          : 'bg-slate-800/70 border-slate-700 text-slate-300'
+                      }`}
+                    >
+                      <Sun className="w-4 h-4" />
+                      <span>နေသာ</span>
+                    </button>
+                    <button
+                      onClick={() => onSelectWeather('sunset_flares')}
+                      className={`p-2 rounded-xl border flex items-center justify-center gap-1.5 cursor-pointer font-bold ${
+                        weather === 'sunset_flares'
+                          ? 'bg-orange-500 text-slate-950 border-yellow-300'
+                          : 'bg-slate-800/70 border-slate-700 text-slate-300'
+                      }`}
+                    >
+                      <Sunset className="w-4 h-4" />
+                      <span>ရွှေဆည်းဆာ</span>
+                    </button>
+                    <button
+                      onClick={() => onSelectWeather('falling_leaves')}
+                      className={`p-2 rounded-xl border flex items-center justify-center gap-1.5 cursor-pointer font-bold ${
+                        weather === 'falling_leaves'
+                          ? 'bg-emerald-600 text-white border-emerald-400'
+                          : 'bg-slate-800/70 border-slate-700 text-slate-300'
+                      }`}
+                    >
+                      <Leaf className="w-4 h-4" />
+                      <span>သစ်ရွက်လေ</span>
+                    </button>
+                    <button
+                      onClick={() => onSelectWeather('tropical_rain')}
+                      className={`p-2 rounded-xl border flex items-center justify-center gap-1.5 cursor-pointer font-bold ${
+                        weather === 'tropical_rain'
+                          ? 'bg-cyan-600 text-white border-cyan-300'
+                          : 'bg-slate-800/70 border-slate-700 text-slate-300'
+                      }`}
+                    >
+                      <CloudRain className="w-4 h-4" />
+                      <span>မိုးဖွဲဖွဲ</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Section 4: Camera Perspective */}
+              <div>
+                <h3 className="text-[11px] font-bold text-amber-400 uppercase tracking-wider mb-2">
+                  ကင်မရာ ရှုထောင့် (Camera Perspective)
+                </h3>
+                <div className="grid grid-cols-3 gap-1.5">
                   <button
                     onClick={() => onCameraModeChange('third_person')}
-                    className={`px-2 py-1 rounded-lg text-[11px] transition-all ${
+                    className={`p-2 rounded-xl border font-bold text-center cursor-pointer ${
                       cameraMode === 'third_person'
-                        ? 'bg-amber-600 text-white font-bold'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-amber-500 text-slate-950 border-yellow-300'
+                        : 'bg-slate-800/70 border-slate-700 text-slate-300'
                     }`}
                   >
                     3rd Person
                   </button>
                   <button
                     onClick={() => onCameraModeChange('first_person')}
-                    className={`px-2 py-1 rounded-lg text-[11px] transition-all ${
+                    className={`p-2 rounded-xl border font-bold text-center cursor-pointer ${
                       cameraMode === 'first_person'
-                        ? 'bg-amber-600 text-white font-bold'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-amber-500 text-slate-950 border-yellow-300'
+                        : 'bg-slate-800/70 border-slate-700 text-slate-300'
                     }`}
                   >
                     1st Person
                   </button>
                   <button
                     onClick={() => onCameraModeChange('cinematic')}
-                    className={`px-2 py-1 rounded-lg text-[11px] transition-all ${
+                    className={`p-2 rounded-xl border font-bold text-center cursor-pointer ${
                       cameraMode === 'cinematic'
-                        ? 'bg-amber-600 text-white font-bold'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-amber-500 text-slate-950 border-yellow-300'
+                        : 'bg-slate-800/70 border-slate-700 text-slate-300'
                     }`}
                   >
-                    Drone Tour
-                  </button>
-                  <button
-                    onClick={onEnterPhotoMode}
-                    className="px-2 py-1 rounded-lg text-[11px] bg-gradient-to-r from-amber-600 to-yellow-600 text-slate-950 font-bold flex items-center gap-1 active:scale-95 transition-all"
-                  >
-                    <Camera className="w-3 h-3" />
-                    <span>Photo Mode</span>
+                    Drone View
                   </button>
                 </div>
               </div>
-            )}
 
-            {/* Tab 4: Social & Daily Quests Panel */}
-            {activeTab === 'social' && (
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+              {/* Section 5: Audio & Display Quick Toggles */}
+              <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
                 <button
-                  onClick={onOpenTasks}
-                  className="px-3 py-1.5 rounded-xl bg-amber-600/90 hover:bg-amber-500 text-yellow-100 text-[11px] font-bold border border-yellow-400 flex items-center gap-1.5 shadow active:scale-95 transition-all"
+                  onClick={onToggleVoice}
+                  className={`flex-1 p-2 rounded-xl border flex items-center justify-center gap-1.5 cursor-pointer font-bold ${
+                    isVoiceActive
+                      ? 'bg-emerald-600 text-white border-emerald-400'
+                      : 'bg-slate-800/80 border-slate-700 text-slate-300'
+                  }`}
                 >
-                  <Award className="w-3.5 h-3.5" />
-                  <span>နေ့စဉ်တာဝန်များ ({dailyTasks.filter(t => t.isCompleted).length}/{dailyTasks.length})</span>
+                  {isVoiceActive ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+                  <span>{isVoiceActive ? 'မိုက်ဖွင့်ထား' : 'မိုက်ပိတ်ထား'}</span>
                 </button>
+
                 <button
-                  onClick={onOpenFriends}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-700 text-amber-200 text-[11px] font-bold border border-slate-700 flex items-center gap-1.5 active:scale-95 transition-all"
+                  onClick={onToggleMute}
+                  className={`flex-1 p-2 rounded-xl border flex items-center justify-center gap-1.5 cursor-pointer font-bold ${
+                    isMuted
+                      ? 'bg-rose-950/80 border-rose-500/40 text-rose-300'
+                      : 'bg-slate-800/80 border-slate-700 text-slate-300'
+                  }`}
                 >
-                  <Users className="w-3.5 h-3.5" />
-                  <span>သူငယ်ချင်းများ ({onlineFriendCount} Online)</span>
+                  {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                  <span>{isMuted ? 'အသံပိတ်ထား' : 'အသံဖွင့်ထား'}</span>
                 </button>
+
                 <button
-                  onClick={onOpenChat}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-700 text-amber-200 text-[11px] font-bold border border-slate-700 flex items-center gap-1.5 active:scale-95 transition-all"
+                  onClick={toggleFullscreen}
+                  className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-amber-300 flex items-center justify-center cursor-pointer"
+                  title="Landscape Fullscreen"
                 >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  <span>စကားဝိုင်းဖွင့်မည်</span>
+                  {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
                 </button>
               </div>
-            )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

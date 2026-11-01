@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createLongyiTexture, createPatheinUmbrellaTexture } from '../textures/proceduralTextures';
-import { CharacterAction, CharacterAppearance, CharacterGender, ColliderBox } from '../types';
+import { CharacterAction, CharacterAppearance, CharacterGender, ColliderBox, SurfaceMaterialType } from '../types';
 import { sound } from '../audio/soundSystem';
 
 /**
@@ -18,6 +18,10 @@ export class CharacterController {
   public isHoldingUmbrella: boolean = false;
   public isHoldingWaterGun: boolean = false;
   public isSitting: boolean = false;
+
+  // Context-aware surface resolver callback
+  public surfaceResolver?: (x: number, z: number) => SurfaceMaterialType;
+  public currentSurface: SurfaceMaterialType = 'concrete';
 
   // Click-to-move navigation target
   public targetDestination: THREE.Vector3 | null = null;
@@ -455,7 +459,10 @@ export class CharacterController {
         hasMoveInput = true;
         const moveAngle = Math.atan2(dx, dz);
         this.rotation = moveAngle;
-        this.group.rotation.y = this.rotation;
+        let angleDiff = moveAngle - this.group.rotation.y;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        this.group.rotation.y += angleDiff * Math.min(1, 14 * dt);
 
         const speed = isSprinting ? this.runSpeed : this.walkSpeed;
         moveX = Math.sin(moveAngle) * speed;
@@ -485,28 +492,43 @@ export class CharacterController {
       const totalAngle = moveAngle + cameraAngle;
 
       this.rotation = totalAngle;
-      this.group.rotation.y = this.rotation;
+      let angleDiff = totalAngle - this.group.rotation.y;
+      while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+      while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+      this.group.rotation.y += angleDiff * Math.min(1, 14 * dt);
 
       moveX = Math.sin(totalAngle) * speed;
       moveZ = Math.cos(totalAngle) * speed;
     }
 
     if (hasMoveInput) {
-      this.velocity.x = moveX;
-      this.velocity.z = moveZ;
+      // Smooth acceleration toward target movement velocity
+      const accelFactor = Math.min(1, 14 * dt);
+      this.velocity.x += (moveX - this.velocity.x) * accelFactor;
+      this.velocity.z += (moveZ - this.velocity.z) * accelFactor;
+
       if (this.isGrounded && this.currentAction !== 'jump') {
         this.currentAction = isSprinting ? 'run' : 'walk';
       }
 
-      // Footstep audio cadence
-      this.footstepTimer += dt * (isSprinting ? 2.6 : 1.7);
+      // Footstep audio cadence (comfortable relaxed pacing)
+      this.footstepTimer += dt * (isSprinting ? 2.4 : 1.6);
       if (this.footstepTimer > 1.0 && this.isGrounded) {
-        sound.playFootstep();
+        const surface = this.surfaceResolver
+          ? this.surfaceResolver(this.position.x, this.position.z)
+          : this.currentSurface;
+        this.currentSurface = surface;
+        sound.playFootstep(surface, isSprinting);
         this.footstepTimer = 0;
       }
     } else {
-      this.velocity.x = 0;
-      this.velocity.z = 0;
+      // Smooth natural deceleration (gentle braking, no sudden jerk)
+      const brakeFactor = Math.min(1, 16 * dt);
+      this.velocity.x += (0 - this.velocity.x) * brakeFactor;
+      this.velocity.z += (0 - this.velocity.z) * brakeFactor;
+      if (Math.abs(this.velocity.x) < 0.04) this.velocity.x = 0;
+      if (Math.abs(this.velocity.z) < 0.04) this.velocity.z = 0;
+
       if (this.isGrounded && this.currentAction !== 'jump' && !this.isSitting) {
         const isEmote = ['pray', 'bow', 'umbrella_dance', 'tea_cheers', 'wave', 'clap', 'laugh', 'water_gun'].includes(this.currentAction);
         if (!isEmote) {

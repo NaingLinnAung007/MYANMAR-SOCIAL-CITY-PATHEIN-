@@ -1,8 +1,10 @@
 export type TimeOfDay = 'day' | 'sunset' | 'night';
 
-export type WeatherType = 'clear' | 'tropical_rain';
+export type WeatherType = 'clear' | 'tropical_rain' | 'sunset_flares' | 'falling_leaves';
 
 export type CameraMode = 'third_person' | 'first_person' | 'cinematic';
+
+export type SurfaceMaterialType = 'marble' | 'wood' | 'soil' | 'concrete';
 
 export type CharacterGender = 'male' | 'female';
 
@@ -55,6 +57,18 @@ export interface InteractiveSpot {
   description: string;
 }
 
+export interface TeaMenuItem {
+  id: string;
+  name: string;
+  burmeseName: string;
+  priceKyats: number;
+  energyBonus: number;
+  meritBonus: number;
+  description: string;
+  burmeseDesc: string;
+  icon: string;
+}
+
 export interface ChatMessage {
   id: string;
   sender: string;
@@ -103,6 +117,7 @@ export interface PlayerStats {
   meritPoints: number;
   level: number;
   luckyDrawCount: number;
+  energy: number;
 }
 
 export interface ColliderBox {
@@ -113,4 +128,5 @@ export interface ColliderBox {
   minY?: number;
   maxY?: number;
 }
+
 

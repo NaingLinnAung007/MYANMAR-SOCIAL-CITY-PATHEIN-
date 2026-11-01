@@ -1,3 +1,5 @@
+import { SurfaceMaterialType } from '../types';
+
 /**
  * Web Audio API procedural sound synthesizer for Pathein, Myanmar
  * Zero external 404 dependencies - all sounds generated procedurally!
@@ -14,11 +16,28 @@ class SoundSystem {
   private rainGain: GainNode | null = null;
   private isRainRunning: boolean = false;
 
+  // Context-aware footstep audio helpers
+  private footstepNoiseBuffer: AudioBuffer | null = null;
+  private footstepStepToggle: boolean = false;
+
   // District-specific ambient sound system
   private currentDistrictId: string | null = null;
   private districtGain: GainNode | null = null;
   private districtActiveNodes: AudioNode[] = [];
   private districtIntervals: number[] = [];
+
+  private getFootstepNoiseBuffer(): AudioBuffer | null {
+    if (!this.ctx) return null;
+    if (!this.footstepNoiseBuffer) {
+      const size = Math.floor(this.ctx.sampleRate * 0.15);
+      this.footstepNoiseBuffer = this.ctx.createBuffer(1, size, this.ctx.sampleRate);
+      const data = this.footstepNoiseBuffer.getChannelData(0);
+      for (let i = 0; i < size; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+    }
+    return this.footstepNoiseBuffer;
+  }
 
   private initCtx() {
     if (!this.ctx) {
@@ -150,29 +169,193 @@ class SoundSystem {
   }
 
   /**
-   * Character Footstep sound
+   * Context-aware character footstep sound synthesizer
+   * Procedurally synthesizes marble terrace tap, hollow wooden plank thump,
+   * soft cushioned soil/grass rustle, or solid concrete road impact.
    */
-  public playFootstep() {
+  public playFootstep(surface: SurfaceMaterialType = 'concrete', isSprinting: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
 
     const t = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
+    // Natural left/right foot micro-pitch variation (±4%)
+    this.footstepStepToggle = !this.footstepStepToggle;
+    const footPitch = this.footstepStepToggle ? 1.03 : 0.97;
+    const sprintPitch = isSprinting ? 1.08 : 1.0;
+    const pitchMod = footPitch * sprintPitch;
+    const volMod = isSprinting ? 1.25 : 1.0;
 
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(140, t);
-    osc.frequency.exponentialRampToValueAtTime(40, t + 0.08);
+    const noiseBuffer = this.getFootstepNoiseBuffer();
 
-    gain.gain.setValueAtTime(0.06, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    switch (surface) {
+      case 'marble': {
+        // Shwemokhtaw Pagoda marble platform: Crisp stone tap with high transient click & subtle stone resonance
+        const osc = this.ctx.createOscillator();
+        const oscGain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(280 * pitchMod, t);
+        osc.frequency.exponentialRampToValueAtTime(110 * pitchMod, t + 0.045);
 
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
+        oscGain.gain.setValueAtTime(0.065 * volMod, t);
+        oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
 
-    osc.start(t);
-    osc.stop(t + 0.08);
+        osc.connect(oscGain);
+        oscGain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.05);
+
+        // High transient click of stone/marble slap
+        if (noiseBuffer) {
+          const noise = this.ctx.createBufferSource();
+          noise.buffer = noiseBuffer;
+          const bandpass = this.ctx.createBiquadFilter();
+          bandpass.type = 'bandpass';
+          bandpass.frequency.setValueAtTime(3200 * pitchMod, t);
+          bandpass.Q.setValueAtTime(4.0, t);
+
+          const noiseGain = this.ctx.createGain();
+          noiseGain.gain.setValueAtTime(0.055 * volMod, t);
+          noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.025);
+
+          noise.connect(bandpass);
+          bandpass.connect(noiseGain);
+          noiseGain.connect(this.ctx.destination);
+          noise.start(t);
+          noise.stop(t + 0.03);
+        }
+        break;
+      }
+
+      case 'wood': {
+        // Pathein Riverfront wooden boardwalk & pier jetty: Hollow acoustic wooden plank thump & timber resonance
+        const bodyOsc = this.ctx.createOscillator();
+        const bodyGain = this.ctx.createGain();
+        bodyOsc.type = 'triangle';
+        bodyOsc.frequency.setValueAtTime(130 * pitchMod, t);
+        bodyOsc.frequency.exponentialRampToValueAtTime(60 * pitchMod, t + 0.08);
+
+        bodyGain.gain.setValueAtTime(0.085 * volMod, t);
+        bodyGain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+
+        bodyOsc.connect(bodyGain);
+        bodyGain.connect(this.ctx.destination);
+        bodyOsc.start(t);
+        bodyOsc.stop(t + 0.085);
+
+        // Hollow acoustic box overtone
+        const overtoneOsc = this.ctx.createOscillator();
+        const overtoneGain = this.ctx.createGain();
+        overtoneOsc.type = 'sine';
+        overtoneOsc.frequency.setValueAtTime(220 * pitchMod, t);
+        overtoneGain.gain.setValueAtTime(0.04 * volMod, t);
+        overtoneGain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+
+        overtoneOsc.connect(overtoneGain);
+        overtoneGain.connect(this.ctx.destination);
+        overtoneOsc.start(t);
+        overtoneOsc.stop(t + 0.055);
+
+        // Dry wood impact transient
+        if (noiseBuffer) {
+          const noise = this.ctx.createBufferSource();
+          noise.buffer = noiseBuffer;
+          const filter = this.ctx.createBiquadFilter();
+          filter.type = 'bandpass';
+          filter.frequency.setValueAtTime(800 * pitchMod, t);
+          filter.Q.setValueAtTime(2.5, t);
+
+          const noiseGain = this.ctx.createGain();
+          noiseGain.gain.setValueAtTime(0.045 * volMod, t);
+          noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+
+          noise.connect(filter);
+          filter.connect(noiseGain);
+          noiseGain.connect(this.ctx.destination);
+          noise.start(t);
+          noise.stop(t + 0.045);
+        }
+        break;
+      }
+
+      case 'soil': {
+        // Social Park lawn & tropical delta green terrain: Soft cushioned muffled thump with subtle grass crinkle
+        const lowOsc = this.ctx.createOscillator();
+        const lowGain = this.ctx.createGain();
+        lowOsc.type = 'sine';
+        lowOsc.frequency.setValueAtTime(95 * pitchMod, t);
+        lowOsc.frequency.exponentialRampToValueAtTime(40 * pitchMod, t + 0.06);
+
+        lowGain.gain.setValueAtTime(0.045 * volMod, t);
+        lowGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+
+        lowOsc.connect(lowGain);
+        lowGain.connect(this.ctx.destination);
+        lowOsc.start(t);
+        lowOsc.stop(t + 0.065);
+
+        // Soft organic grass crunch / earth rustle
+        if (noiseBuffer) {
+          const noise = this.ctx.createBufferSource();
+          noise.buffer = noiseBuffer;
+          const bandpass = this.ctx.createBiquadFilter();
+          bandpass.type = 'bandpass';
+          bandpass.frequency.setValueAtTime(1400 * pitchMod, t);
+          bandpass.Q.setValueAtTime(1.2, t);
+
+          const noiseGain = this.ctx.createGain();
+          noiseGain.gain.setValueAtTime(0.005, t);
+          noiseGain.gain.linearRampToValueAtTime(0.035 * volMod, t + 0.01);
+          noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+
+          noise.connect(bandpass);
+          bandpass.connect(noiseGain);
+          noiseGain.connect(this.ctx.destination);
+          noise.start(t);
+          noise.stop(t + 0.055);
+        }
+        break;
+      }
+
+      case 'concrete':
+      default: {
+        // Downtown asphalt, paved road, and market floor: Solid heavy pavement footstep with grit punch
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(160 * pitchMod, t);
+        osc.frequency.exponentialRampToValueAtTime(45 * pitchMod, t + 0.07);
+
+        gain.gain.setValueAtTime(0.07 * volMod, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.075);
+
+        // Asphalt grit transient
+        if (noiseBuffer) {
+          const noise = this.ctx.createBufferSource();
+          noise.buffer = noiseBuffer;
+          const filter = this.ctx.createBiquadFilter();
+          filter.type = 'bandpass';
+          filter.frequency.setValueAtTime(1800 * pitchMod, t);
+          filter.Q.setValueAtTime(2.2, t);
+
+          const noiseGain = this.ctx.createGain();
+          noiseGain.gain.setValueAtTime(0.045 * volMod, t);
+          noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.035);
+
+          noise.connect(filter);
+          filter.connect(noiseGain);
+          noiseGain.connect(this.ctx.destination);
+          noise.start(t);
+          noise.stop(t + 0.04);
+        }
+        break;
+      }
+    }
   }
 
   /**
@@ -860,6 +1043,60 @@ class SoundSystem {
       osc.start(noteTime);
       osc.stop(noteTime + 1.25);
     });
+  }
+
+  /**
+   * Pouring hot tea into traditional glass cup with glass clink
+   */
+  public playTeaPour() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    const t = this.ctx.currentTime;
+
+    // 1. Water stream noise
+    const bufferSize = Math.floor(this.ctx.sampleRate * 0.45);
+    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      output[i] = Math.random() * 2 - 1;
+    }
+
+    const whiteNoise = this.ctx.createBufferSource();
+    whiteNoise.buffer = noiseBuffer;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(800, t);
+    filter.frequency.linearRampToValueAtTime(1400, t + 0.45);
+    filter.Q.setValueAtTime(4.0, t);
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.01, t);
+    gain.gain.linearRampToValueAtTime(0.12, t + 0.1);
+    gain.gain.linearRampToValueAtTime(0.001, t + 0.45);
+
+    whiteNoise.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    whiteNoise.start(t);
+    whiteNoise.stop(t + 0.45);
+
+    // 2. Glass clink chime at the end
+    const clinkOsc = this.ctx.createOscillator();
+    const clinkGain = this.ctx.createGain();
+    clinkOsc.type = 'sine';
+    clinkOsc.frequency.setValueAtTime(2400, t + 0.28);
+    clinkGain.gain.setValueAtTime(0.08, t + 0.28);
+    clinkGain.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+
+    clinkOsc.connect(clinkGain);
+    clinkGain.connect(this.ctx.destination);
+
+    clinkOsc.start(t + 0.28);
+    clinkOsc.stop(t + 0.55);
   }
 }
 

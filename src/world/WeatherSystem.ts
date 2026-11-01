@@ -144,7 +144,9 @@ export class WeatherSystem {
   }
 
   public toggleWeather(): WeatherType {
-    const next = this.currentWeather === 'clear' ? 'tropical_rain' : 'clear';
+    const list: WeatherType[] = ['clear', 'sunset_flares', 'falling_leaves', 'tropical_rain'];
+    const curIdx = list.indexOf(this.currentWeather);
+    const next = list[(curIdx + 1) % list.length];
     this.setWeather(next);
     return next;
   }
